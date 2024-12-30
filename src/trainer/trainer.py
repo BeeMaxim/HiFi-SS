@@ -32,20 +32,48 @@ class Trainer(BaseTrainer):
         metric_funcs = self.metrics["inference"]
         if self.is_train:
             metric_funcs = self.metrics["train"]
-            self.optimizer.zero_grad()
+            self.g_optimizer.zero_grad()
+            self.d_optimizer.zero_grad()
 
-        outputs = self.model(**batch)
-        batch.update(outputs)
+        clean_audio_hat = self.generator(**batch)
 
-        all_losses = self.criterion(**batch)
-        batch.update(all_losses)
+        # Discriminator step
+        self.d_optimizer.zero_grad()
+
+        discriminator_estimations = self.discriminator(clean_audio_predicted=clean_audio_hat["clean_audio_predicted"].detach(), **batch)
+        # discriminator_estimations = self.discriminator(**batch)
+        batch.update(discriminator_estimations)
+
+        discriminator_loss = self.discriminator_criterion(**batch)
+        batch.update(discriminator_loss)
+        print('DISCRIMINATOR LOSS:', discriminator_loss["discriminator_loss"])
 
         if self.is_train:
-            batch["loss"].backward()  # sum of all losses is always called loss
+            batch["discriminator_loss"].backward()
             self._clip_grad_norm()
-            self.optimizer.step()
-            if self.lr_scheduler is not None:
-                self.lr_scheduler.step()
+            self.d_optimizer.step()
+            if self.d_lr_scheduler is not None:
+                self.d_lr_scheduler.step()
+
+
+        # Generator step
+        self.g_optimizer.zero_grad()
+
+        batch.update(clean_audio_hat)
+
+        discriminator_estimations = self.discriminator(**batch)
+        batch.update(discriminator_estimations)
+
+        generator_loss  = self.generator_criterion(**batch)
+        batch.update(generator_loss)
+        print('GENERATOR LOSS:', generator_loss["generator_loss"])
+
+        if self.is_train:
+            batch["generator_loss"].backward()  # sum of all losses is always called loss
+            self._clip_grad_norm()
+            self.g_optimizer.step()
+            if self.g_lr_scheduler is not None:
+                self.g_lr_scheduler.step()
 
         # update metrics for each loss (in case of multiple losses)
         for loss_name in self.config.writer.loss_names:

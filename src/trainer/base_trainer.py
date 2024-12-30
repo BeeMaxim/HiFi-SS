@@ -17,11 +17,15 @@ class BaseTrainer:
 
     def __init__(
         self,
-        model,
-        criterion,
+        generator,
+        discriminator,
+        generator_criterion,
+        discriminator_criterion,
         metrics,
-        optimizer,
-        lr_scheduler,
+        g_optimizer,
+        d_optimizer,
+        g_lr_scheduler,
+        d_lr_scheduler,
         config,
         device,
         dataloaders,
@@ -33,16 +37,16 @@ class BaseTrainer:
     ):
         """
         Args:
-            model (nn.Module): PyTorch model.
-            criterion (nn.Module): loss function for model training.
+            generator (nn.Module): PyTorch generator.
+            criterion (nn.Module): loss function for generator training.
             metrics (dict): dict with the definition of metrics for training
                 (metrics[train]) and inference (metrics[inference]). Each
                 metric is an instance of src.metrics.BaseMetric.
-            optimizer (Optimizer): optimizer for the model.
+            optimizer (Optimizer): optimizer for the generator.
             lr_scheduler (LRScheduler): learning rate scheduler for the
                 optimizer.
             config (DictConfig): experiment config containing training config.
-            device (str): device for tensors and model.
+            device (str): device for tensors and generator.
             dataloaders (dict[DataLoader]): dataloaders for different
                 sets of data.
             logger (Logger): logger that logs output.
@@ -66,10 +70,14 @@ class BaseTrainer:
         self.logger = logger
         self.log_step = config.trainer.get("log_step", 50)
 
-        self.model = model
-        self.criterion = criterion
-        self.optimizer = optimizer
-        self.lr_scheduler = lr_scheduler
+        self.generator = generator
+        self.discriminator = discriminator
+        self.generator_criterion = generator_criterion
+        self.discriminator_criterion = discriminator_criterion
+        self.g_optimizer = g_optimizer
+        self.d_optimizer = d_optimizer
+        self.g_lr_scheduler = g_lr_scheduler
+        self.d_lr_scheduler = d_lr_scheduler
         self.batch_transforms = batch_transforms
 
         # define dataloaders
@@ -91,7 +99,7 @@ class BaseTrainer:
         self.start_epoch = 1
         self.epochs = self.cfg_trainer.n_epochs
 
-        # configuration to monitor model performance and save best
+        # configuration to monitor generator performance and save best
 
         self.save_period = (
             self.cfg_trainer.save_period
@@ -144,12 +152,12 @@ class BaseTrainer:
 
     def train(self):
         """
-        Wrapper around training process to save model on keyboard interrupt.
+        Wrapper around training process to save generator on keyboard interrupt.
         """
         try:
             self._train_process()
         except KeyboardInterrupt as e:
-            self.logger.info("Saving model on keyboard interrupt")
+            self.logger.info("Saving generator on keyboard interrupt")
             self._save_checkpoint(self._last_epoch, save_best=False)
             raise e
 
@@ -157,7 +165,7 @@ class BaseTrainer:
         """
         Full training logic:
 
-        Training model for an epoch, evaluating it on non-train partitions,
+        Training generator for an epoch, evaluating it on non-train partitions,
         and monitoring the performance improvement (for early stopping
         and saving the best checkpoint).
         """
@@ -174,8 +182,8 @@ class BaseTrainer:
             for key, value in logs.items():
                 self.logger.info(f"    {key:15s}: {value}")
 
-            # evaluate model performance according to configured metric,
-            # save best checkpoint as model_best
+            # evaluate generator performance according to configured metric,
+            # save best checkpoint as generator_best
             best, stop_process, not_improved_count = self._monitor_performance(
                 logs, not_improved_count
             )
@@ -198,7 +206,7 @@ class BaseTrainer:
                 this epoch.
         """
         self.is_train = True
-        self.model.train()
+        self.generator.train()
         self.train_metrics.reset()
         self.writer.set_step((epoch - 1) * self.epoch_len)
         self.writer.add_scalar("epoch", epoch)
@@ -224,12 +232,15 @@ class BaseTrainer:
             if batch_idx % self.log_step == 0:
                 self.writer.set_step((epoch - 1) * self.epoch_len + batch_idx)
                 self.logger.debug(
-                    "Train Epoch: {} {} Loss: {:.6f}".format(
-                        epoch, self._progress(batch_idx), batch["loss"].item()
+                    "Train Epoch: {} {} Discriminator loss: {:.6f} Generator loss: {:.6f}".format(
+                        epoch, self._progress(batch_idx), batch["discriminator_loss"].item(), batch["generator_loss"].item()
                     )
                 )
                 self.writer.add_scalar(
-                    "learning rate", self.lr_scheduler.get_last_lr()[0]
+                    "discriminator learning rate", self.d_lr_scheduler.get_last_lr()[0]
+                )
+                self.writer.add_scalar(
+                    "generator learning rate", self.g_lr_scheduler.get_last_lr()[0]
                 )
                 self._log_scalars(self.train_metrics)
                 self._log_batch(batch_idx, batch)
@@ -251,7 +262,7 @@ class BaseTrainer:
 
     def _evaluation_epoch(self, epoch, part, dataloader):
         """
-        Evaluate model on the partition after training for an epoch.
+        Evaluate generator on the partition after training for an epoch.
 
         Args:
             epoch (int): current training epoch.
@@ -261,7 +272,7 @@ class BaseTrainer:
             logs (dict): logs that contain the information about evaluation.
         """
         self.is_train = False
-        self.model.eval()
+        self.generator.eval()
         self.evaluation_metrics.reset()
         with torch.no_grad():
             for batch_idx, batch in tqdm(
@@ -287,7 +298,7 @@ class BaseTrainer:
         stopping and saving the best checkpoint.
 
         Args:
-            logs (dict): logs after training and evaluating the model for
+            logs (dict): logs after training and evaluating the generator for
                 an epoch.
             not_improved_count (int): the current number of epochs without
                 improvement.
@@ -302,7 +313,7 @@ class BaseTrainer:
         stop_process = False
         if self.mnt_mode != "off":
             try:
-                # check whether model performance improved or not,
+                # check whether generator performance improved or not,
                 # according to specified metric(mnt_metric)
                 if self.mnt_mode == "min":
                     improved = logs[self.mnt_metric] <= self.mnt_best
@@ -313,7 +324,7 @@ class BaseTrainer:
             except KeyError:
                 self.logger.warning(
                     f"Warning: Metric '{self.mnt_metric}' is not found. "
-                    "Model performance monitoring is disabled."
+                    "generator performance monitoring is disabled."
                 )
                 self.mnt_mode = "off"
                 improved = False
@@ -380,7 +391,7 @@ class BaseTrainer:
         """
         if self.config["trainer"].get("max_grad_norm", None) is not None:
             clip_grad_norm_(
-                self.model.parameters(), self.config["trainer"]["max_grad_norm"]
+                self.generator.parameters(), self.config["trainer"]["max_grad_norm"]
             )
 
     @torch.no_grad()
@@ -393,7 +404,7 @@ class BaseTrainer:
         Returns:
             total_norm (float): the calculated norm.
         """
-        parameters = self.model.parameters()
+        parameters = self.generator.parameters()
         if isinstance(parameters, torch.Tensor):
             parameters = [parameters]
         parameters = [p for p in parameters if p.grad is not None]
@@ -457,16 +468,16 @@ class BaseTrainer:
 
         Args:
             epoch (int): current epoch number.
-            save_best (bool): if True, rename the saved checkpoint to 'model_best.pth'.
+            save_best (bool): if True, rename the saved checkpoint to 'generator_best.pth'.
             only_best (bool): if True and the checkpoint is the best, save it only as
-                'model_best.pth'(do not duplicate the checkpoint as
+                'generator_best.pth'(do not duplicate the checkpoint as
                 checkpoint-epochEpochNumber.pth)
         """
-        arch = type(self.model).__name__
+        arch = type(self.generator).__name__
         state = {
             "arch": arch,
             "epoch": epoch,
-            "state_dict": self.model.state_dict(),
+            "state_dict": self.generator.state_dict(),
             "optimizer": self.optimizer.state_dict(),
             "lr_scheduler": self.lr_scheduler.state_dict(),
             "monitor_best": self.mnt_best,
@@ -479,16 +490,16 @@ class BaseTrainer:
                 self.writer.add_checkpoint(filename, str(self.checkpoint_dir.parent))
             self.logger.info(f"Saving checkpoint: {filename} ...")
         if save_best:
-            best_path = str(self.checkpoint_dir / "model_best.pth")
+            best_path = str(self.checkpoint_dir / "generator_best.pth")
             torch.save(state, best_path)
             if self.config.writer.log_checkpoints:
                 self.writer.add_checkpoint(best_path, str(self.checkpoint_dir.parent))
-            self.logger.info("Saving current best: model_best.pth ...")
+            self.logger.info("Saving current best: generator_best.pth ...")
 
     def _resume_checkpoint(self, resume_path):
         """
         Resume from a saved checkpoint (in case of server crash, etc.).
-        The function loads state dicts for everything, including model,
+        The function loads state dicts for everything, including generator,
         optimizers, etc.
 
         Notice that the checkpoint should be located in the current experiment
@@ -504,12 +515,12 @@ class BaseTrainer:
         self.mnt_best = checkpoint["monitor_best"]
 
         # load architecture params from checkpoint.
-        if checkpoint["config"]["model"] != self.config["model"]:
+        if checkpoint["config"]["generator"] != self.config["generator"]:
             self.logger.warning(
                 "Warning: Architecture configuration given in the config file is different from that "
                 "of the checkpoint. This may yield an exception when state_dict is loaded."
             )
-        self.model.load_state_dict(checkpoint["state_dict"])
+        self.generator.load_state_dict(checkpoint["state_dict"])
 
         # load optimizer state from checkpoint only when optimizer type is not changed.
         if (
@@ -531,23 +542,23 @@ class BaseTrainer:
 
     def _from_pretrained(self, pretrained_path):
         """
-        Init model with weights from pretrained pth file.
+        Init generator with weights from pretrained pth file.
 
         Notice that 'pretrained_path' can be any path on the disk. It is not
         necessary to locate it in the experiment saved dir. The function
-        initializes only the model.
+        initializes only the generator.
 
         Args:
-            pretrained_path (str): path to the model state dict.
+            pretrained_path (str): path to the generator state dict.
         """
         pretrained_path = str(pretrained_path)
         if hasattr(self, "logger"):  # to support both trainer and inferencer
-            self.logger.info(f"Loading model weights from: {pretrained_path} ...")
+            self.logger.info(f"Loading generator weights from: {pretrained_path} ...")
         else:
-            print(f"Loading model weights from: {pretrained_path} ...")
+            print(f"Loading generator weights from: {pretrained_path} ...")
         checkpoint = torch.load(pretrained_path, self.device)
 
         if checkpoint.get("state_dict") is not None:
-            self.model.load_state_dict(checkpoint["state_dict"])
+            self.generator.load_state_dict(checkpoint["state_dict"])
         else:
-            self.model.load_state_dict(checkpoint)
+            self.generator.load_state_dict(checkpoint)

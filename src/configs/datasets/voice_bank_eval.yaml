@@ -1,0 +1,6 @@
+test:
+  _target_: src.datasets.VoiceBankDataset
+  split: "test"
+  target_sr: 16000
+  limit: 5
+  instance_transforms: ${transforms.instance_transforms.train}

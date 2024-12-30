@@ -9,6 +9,8 @@ from src.datasets.data_utils import get_dataloaders
 from src.trainer import Trainer
 from src.utils.init_utils import set_random_seed, setup_saving_and_logging
 
+from src.model.disriminators import MultiScaleDiscriminator
+
 warnings.filterwarnings("ignore", category=UserWarning)
 
 
@@ -38,28 +40,45 @@ def main(config):
     dataloaders, batch_transforms = get_dataloaders(config, device)
 
     # build model architecture, then print to console
-    model = instantiate(config.model).to(device)
-    logger.info(model)
+    # model = instantiate(config.model).to(device)
+    # logger.info(model)
+    generator = instantiate(config.model).to(device)
+    discriminator = MultiScaleDiscriminator()
+
+    #logger.info(generator)
+    #logger.info(discriminator)
 
     # get function handles of loss and metrics
-    loss_function = instantiate(config.loss_function).to(device)
+    generator_loss_function = instantiate(config.generator_loss_function).to(device)
+    discriminator_loss_function = instantiate(config.discriminator_loss_function).to(device)
     metrics = instantiate(config.metrics)
 
     # build optimizer, learning rate scheduler
-    trainable_params = filter(lambda p: p.requires_grad, model.parameters())
-    optimizer = instantiate(config.optimizer, params=trainable_params)
-    lr_scheduler = instantiate(config.lr_scheduler, optimizer=optimizer)
+    generator_params = filter(lambda p: p.requires_grad, generator.parameters())
+    discriminator_params = filter(lambda p: p.requires_grad, discriminator.parameters())
+    # discriminator_params = filter(lambda p: p.requires_grad, discriminator.parameters())
+
+    # print(trainable_params)
+    g_optimizer = instantiate(config.optimizer, params=generator_params)
+    g_lr_scheduler = instantiate(config.lr_scheduler, optimizer=g_optimizer)
+
+    d_optimizer = instantiate(config.optimizer, params=discriminator_params)
+    d_lr_scheduler = instantiate(config.lr_scheduler, optimizer=d_optimizer)
 
     # epoch_len = number of iterations for iteration-based training
     # epoch_len = None or len(dataloader) for epoch-based training
     epoch_len = config.trainer.get("epoch_len")
 
     trainer = Trainer(
-        model=model,
-        criterion=loss_function,
+        generator=generator,
+        discriminator=discriminator,
+        generator_criterion=generator_loss_function,
+        discriminator_criterion=discriminator_loss_function,
         metrics=metrics,
-        optimizer=optimizer,
-        lr_scheduler=lr_scheduler,
+        g_optimizer=g_optimizer,
+        d_optimizer=d_optimizer,
+        g_lr_scheduler=g_lr_scheduler,
+        d_lr_scheduler=d_lr_scheduler,
         config=config,
         device=device,
         dataloaders=dataloaders,
