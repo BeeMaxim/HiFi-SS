@@ -43,7 +43,7 @@ def main(config):
     # model = instantiate(config.model).to(device)
     # logger.info(model)
     generator = instantiate(config.model).to(device)
-    discriminator = MultiScaleDiscriminator()
+    discriminator = MultiScaleDiscriminator().to(device)
 
     #logger.info(generator)
     #logger.info(discriminator)

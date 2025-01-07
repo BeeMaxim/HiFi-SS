@@ -1,0 +1,6 @@
+defaults:
+  - model: hifi
+  - _self_
+trainer:
+  device: auto
+  seed: 1

@@ -4,6 +4,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.nn.utils import weight_norm, spectral_norm
 import src.utils.nn_utils as nn_utils
+from hydra.utils import instantiate
 
 # from datasets import mel_spectrogram
 # from .models_registry import generators
@@ -85,18 +86,10 @@ def mel_spectrogram(
         return result
 
 
-# @generators.add_to_registry("hifi_plus")
 class HiFiPlusGenerator(torch.nn.Module):
     def __init__(
         self,
-        hifi_resblock="1",
-        hifi_upsample_rates=(8, 8, 2, 2),
-        hifi_upsample_kernel_sizes=(16, 16, 4, 4),
-        hifi_upsample_initial_channel=128,
-        hifi_resblock_kernel_sizes=(3, 7, 11),
-        hifi_resblock_dilation_sizes=((1, 3, 5), (1, 3, 5), (1, 3, 5)),
-        hifi_input_channels=128,
-        hifi_conv_pre_kernel_size=1,
+        generator,
 
         use_spectralunet=True,
         spectralunet_block_widths=(8, 16, 24, 32, 64),
@@ -125,18 +118,8 @@ class HiFiPlusGenerator(torch.nn.Module):
 
         self.use_skip_connect = use_skip_connect
         self.waveunet_before_spectralmasknet = waveunet_before_spectralmasknet
-
-        self.hifi = nn_utils.HiFiGeneratorBackbone(
-            resblock=hifi_resblock,
-            upsample_rates=hifi_upsample_rates,
-            upsample_kernel_sizes=hifi_upsample_kernel_sizes,
-            upsample_initial_channel=hifi_upsample_initial_channel,
-            resblock_kernel_sizes=hifi_resblock_kernel_sizes,
-            resblock_dilation_sizes=hifi_resblock_dilation_sizes,
-            input_channels=hifi_input_channels,
-            conv_pre_kernel_size=hifi_conv_pre_kernel_size,
-            norm_type=norm_type,
-        )
+        
+        self.hifi = generator
         ch = self.hifi.out_channels
 
         if self.use_spectralunet:
@@ -230,18 +213,10 @@ class HiFiPlusGenerator(torch.nn.Module):
         return x
 
 
-# @generators.add_to_registry("a2a_hifi_plus")
 class A2AHiFiPlusGeneratorV2(HiFiPlusGenerator):
     def __init__(
         self,
-        hifi_resblock="1",
-        hifi_upsample_rates=(8, 8, 2, 2),
-        hifi_upsample_kernel_sizes=(16, 16, 4, 4),
-        hifi_upsample_initial_channel=128,
-        hifi_resblock_kernel_sizes=(3, 7, 11),
-        hifi_resblock_dilation_sizes=((1, 3, 5), (1, 3, 5), (1, 3, 5)),
-        hifi_input_channels=128,
-        hifi_conv_pre_kernel_size=1,
+        generator,
 
         use_spectralunet=True,
         spectralunet_block_widths=(8, 16, 24, 32, 64),
@@ -263,14 +238,7 @@ class A2AHiFiPlusGeneratorV2(HiFiPlusGenerator):
         waveunet_input: Literal["waveform", "hifi", "both"] = "both",
     ):
         super().__init__(
-            hifi_resblock=hifi_resblock,
-            hifi_upsample_rates=hifi_upsample_rates,
-            hifi_upsample_kernel_sizes=hifi_upsample_kernel_sizes,
-            hifi_upsample_initial_channel=hifi_upsample_initial_channel,
-            hifi_resblock_kernel_sizes=hifi_resblock_kernel_sizes,
-            hifi_resblock_dilation_sizes=hifi_resblock_dilation_sizes,
-            hifi_input_channels=hifi_input_channels,
-            hifi_conv_pre_kernel_size=hifi_conv_pre_kernel_size,
+            generator,
 
             use_spectralunet=use_spectralunet,
             spectralunet_block_widths=spectralunet_block_widths,
@@ -289,7 +257,6 @@ class A2AHiFiPlusGeneratorV2(HiFiPlusGenerator):
             use_skip_connect=use_skip_connect,
             waveunet_before_spectralmasknet=waveunet_before_spectralmasknet,
         )
-
         self.waveunet_input = waveunet_input
 
         self.waveunet_conv_pre = None
@@ -358,8 +325,9 @@ class A2AHiFiPlusGeneratorV2(HiFiPlusGenerator):
             x = self.apply_spectralmasknet(x)
         if self.use_waveunet and not self.waveunet_before_spectralmasknet:
             x = self.apply_waveunet_a2a(x, x_orig)
-
+        print(x.shape)
         x = self.conv_post(x)
+        print('after conv post', x.shape)
         x = torch.tanh(x)
         mel_spec_after = self.get_melspec(x)
 

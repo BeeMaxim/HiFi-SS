@@ -2,3 +2,4 @@ train:
   _target_: src.datasets.VoiceBankDataset
   split: "test"
   instance_transforms: ${transforms.instance_transforms.train}
+  limit: 1

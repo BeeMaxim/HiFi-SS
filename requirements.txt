@@ -5,7 +5,7 @@ torchaudio==2.2.0
 numpy==1.26.4
 tqdm
 matplotlib
-pandas
+pandas==2.2.3
 wandb
 comet_ml
 hydra-core
@@ -20,3 +20,4 @@ pre-commit
 wget
 pystoi
 pesq
+thop
