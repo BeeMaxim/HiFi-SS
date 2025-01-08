@@ -60,7 +60,10 @@ class GeneratorLoss(nn.Module):
         super().__init__()
 
     def forward(self, real_estimation, fake_estimation, mel_spec_before, mel_spec_after, real_fmap, fake_fmap, **batch):
-        loss = feature_loss(real_fmap, fake_fmap) # check order
-        loss += generator_loss(fake_estimation)[0]
-        loss += F.l1_loss(mel_spec_before, mel_spec_after) * 45
-        return {"generator_loss": loss}
+        losses = {}
+        losses["feature_loss"] = feature_loss(real_fmap, fake_fmap)
+        losses["g_loss"] = generator_loss(fake_estimation)[0]
+        losses["l1_loss"] = F.l1_loss(mel_spec_before, mel_spec_after)
+        losses["generator_loss"] = losses["feature_loss"] + losses["g_loss"] + losses["l1_loss"] * 45
+
+        return losses

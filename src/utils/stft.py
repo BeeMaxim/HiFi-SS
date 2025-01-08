@@ -149,7 +149,7 @@ class STFT(torch.nn.Module):
             recombine_magnitude_phase,
             Variable(self.inverse_basis, requires_grad=False),
             stride=self.hop_length,
-            padding=0)
+            padding=0).to(magnitude.device)
 
         if self.window is not None:
             window_sum = window_sumsquare(
@@ -195,6 +195,7 @@ class TorchSTFT(torch.nn.Module):
         return torch.abs(forward_transform), torch.angle(forward_transform)
 
     def inverse(self, magnitude, phase):
+        self.window = self.window.to(magnitude.device)
         inverse_transform = torch.istft(
             magnitude * torch.exp(phase * 1j),
             self.filter_length, self.hop_length, self.win_length, window=self.window)

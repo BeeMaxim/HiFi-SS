@@ -34,21 +34,19 @@ class Trainer(BaseTrainer):
             metric_funcs = self.metrics["train"]
             self.g_optimizer.zero_grad()
             self.d_optimizer.zero_grad()
-
         clean_audio_hat = self.generator(**batch)
 
         # Discriminator step
         self.d_optimizer.zero_grad()
         discriminator_estimations = self.discriminator(clean_audio_predicted=clean_audio_hat["clean_audio_predicted"].detach(), **batch)
-        # discriminator_estimations = self.discriminator(**batch)
         batch.update(discriminator_estimations)
 
         discriminator_loss = self.discriminator_criterion(**batch)
         batch.update(discriminator_loss)
-        # print('DISCRIMINATOR LOSS:', discriminator_loss["discriminator_loss"])
 
         if self.is_train:
             batch["discriminator_loss"].backward()
+
             self._clip_grad_norm()
             self.d_optimizer.step()
             if self.d_lr_scheduler is not None:
@@ -65,7 +63,6 @@ class Trainer(BaseTrainer):
 
         generator_loss  = self.generator_criterion(**batch)
         batch.update(generator_loss)
-        # print('GENERATOR LOSS:', generator_loss["generator_loss"])
 
         if self.is_train:
             batch["generator_loss"].backward()  # sum of all losses is always called loss

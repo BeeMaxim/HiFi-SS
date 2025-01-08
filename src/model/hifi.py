@@ -325,9 +325,8 @@ class A2AHiFiPlusGeneratorV2(HiFiPlusGenerator):
             x = self.apply_spectralmasknet(x)
         if self.use_waveunet and not self.waveunet_before_spectralmasknet:
             x = self.apply_waveunet_a2a(x, x_orig)
-        print(x.shape)
+
         x = self.conv_post(x)
-        print('after conv post', x.shape)
         x = torch.tanh(x)
         mel_spec_after = self.get_melspec(x)
 

@@ -8,10 +8,10 @@ defaults:
   - _self_
 optimizer:
   _target_: torch.optim.Adam
-  lr: 3e-4
+  lr: 2e-4
 lr_scheduler:
   _target_: torch.optim.lr_scheduler.StepLR
-  gamma: 0.9
+  gamma: 1.0
   step_size: ${trainer.epoch_len}
 generator_loss_function:
   _target_: src.loss.GeneratorLoss
@@ -19,7 +19,7 @@ discriminator_loss_function:
   _target_: src.loss.DiscriminatorLoss
 trainer:
   log_step: 50
-  n_epochs: 1000000
+  n_epochs: 1000
   epoch_len: 1
   device_tensors: ["clean_audio", "noisy_audio"] # which tensors should be on device (ex. GPU)
   resume_from: null # null or path to the checkpoint dir with *.pth and config.yaml

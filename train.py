@@ -9,7 +9,7 @@ from src.datasets.data_utils import get_dataloaders
 from src.trainer import Trainer
 from src.utils.init_utils import set_random_seed, setup_saving_and_logging
 
-from src.model.disriminators import MultiScaleDiscriminator
+from src.model.disriminators import Discriminator
 
 warnings.filterwarnings("ignore", category=UserWarning)
 
@@ -34,6 +34,7 @@ def main(config):
         device = "cuda" if torch.cuda.is_available() else "cpu"
     else:
         device = config.trainer.device
+    print(torch.cuda.get_device_name())
 
     # setup data_loader instances
     # batch_transforms should be put on device
@@ -43,7 +44,7 @@ def main(config):
     # model = instantiate(config.model).to(device)
     # logger.info(model)
     generator = instantiate(config.model).to(device)
-    discriminator = MultiScaleDiscriminator().to(device)
+    discriminator = Discriminator().to(device)
 
     #logger.info(generator)
     #logger.info(discriminator)

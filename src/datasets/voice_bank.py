@@ -15,6 +15,7 @@ import os
 import shutil
 from pathlib import Path
 import wget
+import time
 
 
 URL_LINKS = {

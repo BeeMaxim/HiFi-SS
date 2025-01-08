@@ -139,7 +139,7 @@ class Generator(torch.nn.Module):
         x = self.reflection_pad(x)
         x = self.conv_post(x)
         spec = torch.exp(x[:,:self.post_n_fft // 2 + 1, :])
-        phase = torch.sin(x[:, self.post_n_fft // 2 + 1:, :])
+        phase = torch.sin(x[:, self.post_n_fft // 2 + 1:, :]) * torch.pi
 
         return self.stft.inverse(spec, phase)
     
