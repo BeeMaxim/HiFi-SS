@@ -104,13 +104,15 @@ class Generator(torch.nn.Module):
 
         self.ups = nn.ModuleList()
         for i, (u, k) in enumerate(zip(upsample_rates, upsample_kernel_sizes)):
+            decrease_channels = 1 if (u != 1) else 0
             self.ups.append(weight_norm(
-                ConvTranspose1d(upsample_initial_channel//(2**i), upsample_initial_channel//(2**(i+1)),
+                ConvTranspose1d(upsample_initial_channel//(2**i), upsample_initial_channel//(2**(i + decrease_channels)),
                                 k, u, padding=(k-u)//2)))
 
         self.resblocks = nn.ModuleList()
         for i in range(len(self.ups)):
-            ch = upsample_initial_channel//(2**(i+1))
+            decrease_channels = 1 if (upsample_rates[i] != 1) else 0
+            ch = upsample_initial_channel//(2**(i + decrease_channels))
             for j, (k, d) in enumerate(zip(resblock_kernel_sizes, resblock_dilation_sizes)):
                 self.resblocks.append(resblock(ch, k, d))
 
@@ -139,7 +141,7 @@ class Generator(torch.nn.Module):
         x = self.reflection_pad(x)
         x = self.conv_post(x)
         spec = torch.exp(x[:,:self.post_n_fft // 2 + 1, :])
-        phase = torch.sin(x[:, self.post_n_fft // 2 + 1:, :]) * torch.pi
+        phase = torch.sin(x[:, self.post_n_fft // 2 + 1:, :]) # * torch.pi
 
         return self.stft.inverse(spec, phase)
     

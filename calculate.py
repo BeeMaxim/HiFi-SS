@@ -25,7 +25,7 @@ def main(config):
         device = config.trainer.device
 
     model = instantiate(config.model).to(device)
-    input = torch.randn(1, 1, 1024 * 16)
+    input = torch.randn(1, 1, 1024 * 16).to(device)
     macs, params = profile(model, inputs=(input, ), verbose=False)
     macs, params = clever_format([macs, params], "%.3f")
     print('generator params:', sum(p.numel() for p in model.hifi.parameters()))
