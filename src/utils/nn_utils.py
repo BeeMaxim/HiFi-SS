@@ -8,6 +8,8 @@ import torch.nn.functional as F
 from torch.nn.utils import weight_norm, spectral_norm
 from librosa.filters import mel as librosa_mel_fn
 
+from src.utils.stft import TorchSTFT
+
 
 def init_weights(m, mean=0.0, std=0.01):
     classname = m.__class__.__name__
@@ -389,6 +391,9 @@ class HiFiGeneratorBackbone(torch.nn.Module):
             conv_pre_kernel_size=1,
             input_channels=80,
             norm_type: Literal["weight", "spectral"] = "weight",
+            use_istft=False,
+            gen_istft_n_fft=0,
+            gen_istft_hop_size=0
     ):
         super().__init__()
         self.norm = dict(weight=weight_norm, spectral=spectral_norm)[norm_type]
@@ -411,6 +416,16 @@ class HiFiGeneratorBackbone(torch.nn.Module):
             resblock_kernel_sizes,
             resblock_dilation_sizes,
         )
+      
+        if use_istft or True:
+            self.post_n_fft = gen_istft_n_fft
+            self.reflection_pad = torch.nn.ReflectionPad1d((1, 0))
+            self.conv_post = torch.nn.Conv1d(self.out_channels, self.post_n_fft + 2, 7, 1, padding=3) # weight norm?
+            self.conv_post.apply(init_weights)
+            self.out_channels = 1
+            self.stft = TorchSTFT(filter_length=gen_istft_n_fft, hop_length=gen_istft_hop_size, win_length=gen_istft_n_fft)
+        
+        self.use_stft = use_istft
 
     def make_conv_pre(self, input_channels, upsample_initial_channel, kernel_size):
         assert kernel_size % 2 == 1
@@ -436,11 +451,12 @@ class HiFiGeneratorBackbone(torch.nn.Module):
 
         self.ups = nn.ModuleList()
         for i, (u, k) in enumerate(zip(upsample_rates, upsample_kernel_sizes)):
+            decrease_channels = 1 if (upsample_rates[i] != 1) else 0
             self.ups.append(
                 self.norm(
                     nn.ConvTranspose1d(
                         upsample_initial_channel // (2 ** i),
-                        upsample_initial_channel // (2 ** (i + 1)),
+                        upsample_initial_channel // (2 ** (i + decrease_channels)),
                         k,
                         u,
                         padding=(k - u) // 2,
@@ -451,7 +467,8 @@ class HiFiGeneratorBackbone(torch.nn.Module):
         ch = None
         self.resblocks = nn.ModuleList()
         for i in range(len(self.ups)):
-            ch = upsample_initial_channel // (2 ** (i + 1))
+            decrease_channels = 1 if (upsample_rates[i] != 1) else 0
+            ch = upsample_initial_channel // (2 ** (i + decrease_channels))
             for j, (k, d) in enumerate(
                 zip(resblock_kernel_sizes, resblock_dilation_sizes)
             ):
@@ -474,7 +491,15 @@ class HiFiGeneratorBackbone(torch.nn.Module):
                     xs += self.resblocks[i * self.num_kernels + j](x)
             x = xs / self.num_kernels
         x = F.leaky_relu(x)
-        return x
+
+        if self.use_stft:
+            x = self.reflection_pad(x)
+            x = self.conv_post(x)
+            spec = torch.exp(x[:,:self.post_n_fft // 2 + 1, :])
+            phase = torch.sin(x[:, self.post_n_fft // 2 + 1:, :])
+            return self.stft.inverse(spec, phase)
+        else:
+            return x
 
 
 class SpectralUNet(nn.Module):

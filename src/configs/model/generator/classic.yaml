@@ -8,3 +8,4 @@ resblock_dilation_sizes: [[1, 3, 5], [1, 3, 5], [1, 3, 5]]
 conv_pre_kernel_size: 1
 input_channels: 128
 norm_type: weight
+use_istft: False

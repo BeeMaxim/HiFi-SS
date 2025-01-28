@@ -101,13 +101,15 @@ class VoiceBankDataset(BaseDataset):
             clean_audio = torchaudio.functional.resample(clean_audio, sr, self.target_sr)
 
         audio_len = noisy_audio.size(1)
+        '''
         split = 32768
         if audio_len > split:
             max_audio_start = audio_len - split
             audio_start = random.randint(0, max_audio_start)
+            audio_start = 0
             audio_len = split
             noisy_audio = noisy_audio[:, audio_start : audio_start + split]
-            clean_audio = clean_audio[:, audio_start : audio_start + split]
+            clean_audio = clean_audio[:, audio_start : audio_start + split]'''
             
         clean_audio = torch.from_numpy(normalize(clean_audio.numpy(), axis=1) * 0.95)
         noisy_audio = torch.from_numpy(normalize(noisy_audio.numpy(), axis=1) * 0.95)
