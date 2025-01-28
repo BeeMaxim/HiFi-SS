@@ -417,7 +417,7 @@ class HiFiGeneratorBackbone(torch.nn.Module):
             resblock_dilation_sizes,
         )
       
-        if use_istft or True:
+        if use_istft:
             self.post_n_fft = gen_istft_n_fft
             self.reflection_pad = torch.nn.ReflectionPad1d((1, 0))
             self.conv_post = torch.nn.Conv1d(self.out_channels, self.post_n_fft + 2, 7, 1, padding=3) # weight norm?
@@ -425,7 +425,7 @@ class HiFiGeneratorBackbone(torch.nn.Module):
             self.out_channels = 1
             self.stft = TorchSTFT(filter_length=gen_istft_n_fft, hop_length=gen_istft_hop_size, win_length=gen_istft_n_fft)
         
-        self.use_stft = use_istft
+        self.use_istft = use_istft
 
     def make_conv_pre(self, input_channels, upsample_initial_channel, kernel_size):
         assert kernel_size % 2 == 1
@@ -492,7 +492,7 @@ class HiFiGeneratorBackbone(torch.nn.Module):
             x = xs / self.num_kernels
         x = F.leaky_relu(x)
 
-        if self.use_stft:
+        if self.use_istft:
             x = self.reflection_pad(x)
             x = self.conv_post(x)
             spec = torch.exp(x[:,:self.post_n_fft // 2 + 1, :])

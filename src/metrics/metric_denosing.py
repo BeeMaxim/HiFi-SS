@@ -12,6 +12,8 @@ from scipy.linalg import toeplitz
 
 def composite_eval(ref_wav, deg_wav):
     # returns [sig, bak, ovl]
+    ref_wav = ref_wav[0, 0].cpu().numpy()
+    deg_wav = deg_wav[0, 0].cpu().numpy()
     alpha = 0.95
     len_ = min(ref_wav.shape[0], deg_wav.shape[0])
     ref_wav = ref_wav[:len_]
