@@ -496,7 +496,12 @@ class HiFiGeneratorBackbone(torch.nn.Module):
             x = self.reflection_pad(x)
             x = self.conv_post(x)
             spec = torch.exp(x[:,:self.post_n_fft // 2 + 1, :])
-            phase = torch.sin(x[:, self.post_n_fft // 2 + 1:, :])
+            p = x[:, self.post_n_fft // 2 + 1:, :]
+
+            x_p = torch.cos(p)
+            y_p = torch.sin(p)
+            phase = torch.atan2(y_p, x_p) # vocos style (but not exactly)
+
             return self.stft.inverse(spec, phase)
         else:
             return x
