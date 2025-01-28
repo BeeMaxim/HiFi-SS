@@ -114,6 +114,7 @@ class VoiceBankDataset(BaseDataset):
         clean_audio = torch.from_numpy(normalize(clean_audio.numpy(), axis=1) * 0.95)
         noisy_audio = torch.from_numpy(normalize(noisy_audio.numpy(), axis=1) * 0.95)
         file_name = data_dict["file_name"]
+        print(file_name)
 
         instance_data = {"noisy_audio": noisy_audio,
                          "clean_audio": clean_audio,

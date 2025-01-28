@@ -11,7 +11,7 @@ optimizer:
   lr: 2e-4
 lr_scheduler:
   _target_: torch.optim.lr_scheduler.StepLR
-  gamma: 1.0
+  gamma: 1
   step_size: ${trainer.epoch_len}
 generator_loss_function:
   _target_: src.loss.GeneratorLoss

@@ -89,7 +89,6 @@ def main(config):
         batch_transforms=batch_transforms,
         skip_oom=config.trainer.get("skip_oom", True),
     )
-
     trainer.train()
     
     if config.trainer.inference:
