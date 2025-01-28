@@ -6,9 +6,9 @@ train: # metrics that are calculated during training
   - _target_: src.metrics.SDR
   - _target_: src.metrics.STOI
   - _target_: src.metrics.PESQ
-  - _target_: src.metrics.CSIG
-  - _target_: src.metrics.COVL
-  - _target_: src.metrics.CBAK
+#  - _target_: src.metrics.CSIG
+#  - _target_: src.metrics.COVL
+#  - _target_: src.metrics.CBAK
 inference: # metrics that are calculated during inference (eval)
   - _target_: src.metrics.MOSNet
   - _target_: src.metrics.SiSNR

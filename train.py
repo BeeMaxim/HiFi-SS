@@ -6,7 +6,7 @@ from hydra.utils import instantiate
 from omegaconf import OmegaConf
 
 from src.datasets.data_utils import get_dataloaders
-from src.trainer import Trainer
+from src.trainer import Trainer, Inferencer
 from src.utils.init_utils import set_random_seed, setup_saving_and_logging
 
 from src.model.disriminators import Discriminator
@@ -91,6 +91,25 @@ def main(config):
     )
 
     trainer.train()
+    
+    if config.trainer.inference:
+        inferencer = Inferencer(
+            generator=generator,
+            config=config,
+            device=device,
+            dataloaders=dataloaders,
+            batch_transforms=batch_transforms,
+            save_path=None,
+            metrics=metrics,
+            skip_model_load=True,
+        )
+
+        logs = inferencer.run_inference()
+
+        for part in logs.keys():
+            for key, value in logs[part].items():
+                full_key = part + "_" + key
+                print(f"    {full_key:15s}: {value}")
 
 
 if __name__ == "__main__":
