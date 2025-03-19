@@ -1,0 +1,5 @@
+_target_: src.model.A2AHiFiPlusGeneratorBSS
+use_waveunet: True
+out_channels: 2
+defaults:
+  - generator: classic

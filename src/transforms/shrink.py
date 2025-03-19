@@ -19,7 +19,7 @@ class Shrink(nn.Module):
     def forward(self, x):
         """
         Args:
-            x (Tensor): input tensor if shape (1, T)
+            x (Tensor): input tensor of shape (C, T)
         Returns:
             x (Tensor): shrinked tensor.
         """

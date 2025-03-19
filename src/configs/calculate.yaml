@@ -1,5 +1,5 @@
 defaults:
-  - model: hifi
+  - model: bss_v1
   - _self_
 trainer:
   device: auto

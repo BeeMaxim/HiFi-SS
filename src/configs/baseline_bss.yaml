@@ -1,10 +1,10 @@
 defaults:
-  - model: hifi
+  - model: bss_v1
   - writer: wandb
-  - metrics: speech_denoising
-  - datasets: voice_bank
+  - metrics: bss
+  - datasets: librispeech_mix
   - dataloader: example
-  - transforms: example
+  - transforms: bss
   - _self_
 optimizer:
   _target_: torch.optim.Adam
@@ -14,14 +14,14 @@ lr_scheduler:
   gamma: 1
   step_size: ${trainer.epoch_len}
 generator_loss_function:
-  _target_: src.loss.GeneratorLoss
+  _target_: src.loss.BSSGeneratorLoss
 discriminator_loss_function:
   _target_: src.loss.DiscriminatorLoss
 trainer:
   log_step: 50
   n_epochs: 2000
   epoch_len: 1
-  device_tensors: ["clean_audio", "noisy_audio"] # which tensors should be on device (ex. GPU)
+  device_tensors: ["mix_audio", "ids", "audios"] # which tensors should be on device (ex. GPU)
   resume_from: null # null or path to the checkpoint dir with *.pth and config.yaml
   device: auto # device name or "auto"
   override: True # if True, will override the previous run with the same name
@@ -32,6 +32,6 @@ trainer:
   seed: 1
   inference: True
 inferencer: # to calculate full metrics on train
-  device_tensors: ["clean_audio", "noisy_audio"] # which tensors should be on device (ex. GPU)
+  device_tensors: ["mix_audio", "ids", "audios"] # which tensors should be on device (ex. GPU)
   device: auto # device name or "auto"
   seed: 1

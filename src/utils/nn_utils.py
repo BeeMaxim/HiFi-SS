@@ -382,18 +382,19 @@ class MultiScaleResnet2d(nn.Module):
 class HiFiGeneratorBackbone(torch.nn.Module):
     def __init__(
             self,
-            resblock="2",
-            upsample_rates=(8, 8, 2, 2),
-            upsample_kernel_sizes=(16, 16, 4, 4),
-            upsample_initial_channel=128,
-            resblock_kernel_sizes=(3, 7, 11),
-            resblock_dilation_sizes=((1, 3, 5), (1, 3, 5), (1, 3, 5)),
-            conv_pre_kernel_size=1,
-            input_channels=80,
+            resblock,
+            upsample_rates,
+            upsample_kernel_sizes,
+            upsample_initial_channel,
+            resblock_kernel_sizes,
+            resblock_dilation_sizes,
+            conv_pre_kernel_size,
+            input_channels,
             norm_type: Literal["weight", "spectral"] = "weight",
             use_istft=False,
             gen_istft_n_fft=0,
-            gen_istft_hop_size=0
+            gen_istft_hop_size=0,
+            return_stft=False,
     ):
         super().__init__()
         self.norm = dict(weight=weight_norm, spectral=spectral_norm)[norm_type]
@@ -420,12 +421,15 @@ class HiFiGeneratorBackbone(torch.nn.Module):
         if use_istft:
             self.post_n_fft = gen_istft_n_fft
             self.reflection_pad = torch.nn.ReflectionPad1d((1, 0))
-            self.conv_post = torch.nn.Conv1d(self.out_channels, self.post_n_fft + 2, 7, 1, padding=3) # weight norm?
+            # self.conv_pre.apply(init_weights)
+            self.ups.apply(init_weights)
+            self.conv_post = weight_norm(torch.nn.Conv1d(self.out_channels, self.post_n_fft + 2, 7, 1, padding=3)) # weight norm?
             self.conv_post.apply(init_weights)
             self.out_channels = 1
             self.stft = TorchSTFT(filter_length=gen_istft_n_fft, hop_length=gen_istft_hop_size, win_length=gen_istft_n_fft)
         
         self.use_istft = use_istft
+        self.return_stft = return_stft
 
     def make_conv_pre(self, input_channels, upsample_initial_channel, kernel_size):
         assert kernel_size % 2 == 1
@@ -434,7 +438,7 @@ class HiFiGeneratorBackbone(torch.nn.Module):
                 input_channels, upsample_initial_channel, kernel_size, 1, padding=kernel_size // 2
             )
         )
-        self.conv_pre.apply(init_weights)
+        # self.conv_pre.apply(init_weights)
 
     def make_resblocks(
         self,
@@ -445,13 +449,14 @@ class HiFiGeneratorBackbone(torch.nn.Module):
         resblock_kernel_sizes,
         resblock_dilation_sizes,
     ):
+        
         resblock = (
             ResBlock1 if resblock == "1" else ResBlock2
         )
 
         self.ups = nn.ModuleList()
         for i, (u, k) in enumerate(zip(upsample_rates, upsample_kernel_sizes)):
-            decrease_channels = 1 if (upsample_rates[i] != 1) else 0
+            decrease_channels = 1 if (u != 1) else 0
             self.ups.append(
                 self.norm(
                     nn.ConvTranspose1d(
@@ -475,9 +480,9 @@ class HiFiGeneratorBackbone(torch.nn.Module):
                 self.resblocks.append(
                     resblock(ch, k, d, norm_type=self.norm_type)
                 )
-        self.ups.apply(init_weights)
+        # self.ups.apply(init_weights)
         return ch
-
+    
     def forward(self, x):
         x = self.conv_pre(x)
         for i in range(self.num_upsamples):
@@ -496,13 +501,18 @@ class HiFiGeneratorBackbone(torch.nn.Module):
             x = self.reflection_pad(x)
             x = self.conv_post(x)
             spec = torch.exp(x[:,:self.post_n_fft // 2 + 1, :])
+            
             p = x[:, self.post_n_fft // 2 + 1:, :]
 
             x_p = torch.cos(p)
             y_p = torch.sin(p)
             phase = torch.atan2(y_p, x_p) # vocos style (but not exactly)
+            phase = torch.sin(x[:, self.post_n_fft // 2 + 1:, :])
 
-            return self.stft.inverse(spec, phase)
+            if self.return_stft:
+                spec * torch.exp(phase * 1j)
+            else:
+                return self.stft.inverse(spec, phase)
         else:
             return x
 

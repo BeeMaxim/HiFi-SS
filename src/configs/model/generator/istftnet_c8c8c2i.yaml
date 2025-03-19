@@ -1,4 +1,5 @@
 _target_: src.utils.nn_utils.HiFiGeneratorBackbone
+#_target_: src.model.generator.istftnet.Generator
 resblock: "1"
 upsample_rates: [8, 8, 2]
 upsample_kernel_sizes: [16, 16, 4]

@@ -64,6 +64,10 @@ def get_dataloaders(config, device):
 
     # dataset partitions init
     datasets = instantiate(config.datasets)  # instance transforms are defined inside
+    if "index_mapping" in datasets["train"].__dict__:
+        speaker_ids = len(datasets["train"].index_mapping)
+    else:
+        speaker_ids = 0
 
     # dataloaders init
     dataloaders = {}
@@ -85,4 +89,4 @@ def get_dataloaders(config, device):
         )
         dataloaders[dataset_partition] = partition_dataloader
 
-    return dataloaders, batch_transforms
+    return dataloaders, batch_transforms, speaker_ids

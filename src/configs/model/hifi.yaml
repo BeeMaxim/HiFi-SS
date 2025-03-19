@@ -1,3 +1,4 @@
 _target_: src.model.A2AHiFiPlusGeneratorV2
+use_waveunet: True
 defaults:
   - generator: classic

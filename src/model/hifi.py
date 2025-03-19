@@ -107,6 +107,7 @@ class HiFiPlusGenerator(torch.nn.Module):
         norm_type: Literal["weight", "spectral"] = "weight",
         use_skip_connect=True,
         waveunet_before_spectralmasknet=True,
+        out_ch=1
     ):
         super().__init__()
         self.norm = dict(weight=weight_norm, spectral=spectral_norm)[norm_type]
@@ -155,7 +156,7 @@ class HiFiPlusGenerator(torch.nn.Module):
             self.make_spectralmasknet_skip_connect(ch)
 
         self.conv_post = None
-        self.make_conv_post(ch)
+        self.make_conv_post(ch, out_ch=out_ch)
 
     def make_waveunet_skip_connect(self, ch):
         self.waveunet_skip_connect = self.norm(nn.Conv1d(ch, ch, 1, 1))
@@ -167,8 +168,8 @@ class HiFiPlusGenerator(torch.nn.Module):
         self.spectralmasknet_skip_connect.weight.data = torch.eye(ch, ch).unsqueeze(-1)
         self.spectralmasknet_skip_connect.bias.data.fill_(0.0)
 
-    def make_conv_post(self, ch):
-        self.conv_post = self.norm(nn.Conv1d(ch, 1, 7, 1, padding=3))
+    def make_conv_post(self, ch, out_ch=1):
+        self.conv_post = self.norm(nn.Conv1d(ch, out_ch, 7, 1, padding=3))
         self.conv_post.apply(nn_utils.init_weights)
 
     def apply_spectralunet(self, x_orig):
@@ -209,7 +210,7 @@ class HiFiPlusGenerator(torch.nn.Module):
 
         x = self.conv_post(x)
         x = torch.tanh(x)
-
+        
         return x
 
 
@@ -236,6 +237,7 @@ class A2AHiFiPlusGeneratorV2(HiFiPlusGenerator):
         waveunet_before_spectralmasknet=True,
 
         waveunet_input: Literal["waveform", "hifi", "both"] = "both",
+        out_channels=1
     ):
         super().__init__(
             generator,
@@ -256,6 +258,7 @@ class A2AHiFiPlusGeneratorV2(HiFiPlusGenerator):
             norm_type=norm_type,
             use_skip_connect=use_skip_connect,
             waveunet_before_spectralmasknet=waveunet_before_spectralmasknet,
+            out_ch=out_channels
         )
         self.waveunet_input = waveunet_input
 
@@ -306,6 +309,7 @@ class A2AHiFiPlusGeneratorV2(HiFiPlusGenerator):
         return x
 
     def forward(self, noisy_audio, **batch):
+        print("orig", noisy_audio.shape)
         x = noisy_audio
         if len(x.shape) == 2:
             x = x.unsqueeze(1) # adding channel dimension
@@ -316,19 +320,24 @@ class A2AHiFiPlusGeneratorV2(HiFiPlusGenerator):
         x = self.get_melspec(x_orig)
 
         mel_spec_before = x.clone()
+        print("mel spec", x.shape)
         x = self.apply_spectralunet(x)
 
         x = self.hifi(x)
-        if self.use_waveunet and self.waveunet_before_spectralmasknet:
+        print("after hifi", x.shape)
+        if self.use_waveunet and self.waveunet_before_spectralmasknet and not self.hifi.return_stft:
             x = self.apply_waveunet_a2a(x, x_orig)
+            print("after waveunet", x.shape)
         if self.use_spectralmasknet:
             x = self.apply_spectralmasknet(x)
+            print("after spectral", x.shape)
         if self.use_waveunet and not self.waveunet_before_spectralmasknet:
             x = self.apply_waveunet_a2a(x, x_orig)
 
         x = self.conv_post(x)
+
         x = torch.tanh(x)
         mel_spec_after = self.get_melspec(x)
-
+        print('X', x.isnan().any())
         return {"clean_audio_predicted": x, "mel_spec_before": mel_spec_before, "mel_spec_after": mel_spec_after}
     

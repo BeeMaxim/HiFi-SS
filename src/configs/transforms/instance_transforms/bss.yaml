@@ -1,0 +1,14 @@
+train:
+  mix_audio:
+    _target_: src.transforms.Shrink
+    factor: 1024
+  audios:
+    _target_: src.transforms.Shrink
+    factor: 1024
+inference:
+  mix_audio:
+    _target_: src.transforms.Shrink
+    factor: 1024
+  audios:
+    _target_: src.transforms.Shrink
+    factor: 1024
