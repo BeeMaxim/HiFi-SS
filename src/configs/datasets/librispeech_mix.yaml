@@ -1,5 +1,13 @@
 train:
   _target_: src.datasets.LibrispeechMixDataset
-  part: "dev-clean"
+  part: "train-clean-100"
+  segment_size: 8192
   instance_transforms: ${transforms.instance_transforms.train}
-  limit: 1
+  limit: 20000
+test:
+  _target_: src.datasets.LibrispeechMixDataset
+  part: "test-clean"
+  segment_size: 8192
+  instance_transforms: ${transforms.instance_transforms.train}
+  limit: 200
+ # limit: 2

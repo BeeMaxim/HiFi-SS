@@ -113,7 +113,6 @@ class DiscriminatorS(torch.nn.Module):
         fmap = []
         if self.use_id_channel:
             embed = self.id_embedding(speaker_id)
-            print("EMBED", embed[:, :6], speaker_id)
             embed = embed.unsqueeze(-1).expand(-1, -1, x.shape[2])
             x = torch.cat([x, embed], dim=1)
 
@@ -167,13 +166,19 @@ class BSSDiscriminator(nn.Module):
                                             embedding_count=embedding_count)
 
     def forward(self, audios, ids=None, **batch):
-        audios = audios.view(audios.shape[0] * audios.shape[1], 1, -1)
+        B, C, _ = audios.shape
+        audios = audios.reshape(B * C, 1, -1)
         if ids is not None:
             ids = ids.flatten()
         res = self.mpd(audios, ids)
 
         for key, value in self.msd(audios, ids).items():
             res[key].extend(value)
+
+        res["estimation"] = [x.reshape(B, C, -1) for x in res["estimation"]]
+        for i in range(len(res["fmap"])):
+            res["fmap"][i] = [x.reshape(B, C, *x.shape[1:]) for x in res["fmap"][i]]
+
         return res
     
 

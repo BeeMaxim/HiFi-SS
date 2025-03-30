@@ -145,12 +145,11 @@ class BSSTrainer(BaseTrainer):
         outputs = self.generator(**batch)
         real_melspec = self.generator.get_melspec(batch["audios"])
         batch.update({"real_melspec": real_melspec} | outputs)
-        
         generator_loss, order = self.generator_criterion(**batch, discriminator=self.discriminator)
         batch.update(generator_loss)
 
         if self.is_train:
-            batch["generator_loss"].backward()  # sum of all losses is always called loss
+            batch["generator_loss"].backward()
             self._clip_grad_norm()
             self.g_optimizer.step()
             if self.g_lr_scheduler is not None:
@@ -171,7 +170,6 @@ class BSSTrainer(BaseTrainer):
 
         if self.is_train:
             batch["discriminator_loss"].backward()
-
             self._clip_grad_norm()
             self.d_optimizer.step()
             if self.d_lr_scheduler is not None:
@@ -183,6 +181,7 @@ class BSSTrainer(BaseTrainer):
 
         for met in metric_funcs:
             metrics.update(met.name, met(**batch))
+
         return batch
 
     def _log_batch(self, batch_idx, batch, mode="train"):
@@ -197,25 +196,29 @@ class BSSTrainer(BaseTrainer):
             mode (str): train or inference. Defines which logging
                 rules to apply.
         """
-        if mode == "train":
+        if mode == "test":
             predicted = batch["reordered"]
             gt = batch["audios"]
             sr = batch["sr"]
             audios = {
-                "first_predicted": wandb.Audio(predicted[0, 0, :].cpu().detach().numpy(), sample_rate=sr),
-                "second_predicted": wandb.Audio(predicted[0, 1, :].cpu().detach().numpy(), sample_rate=sr),
-                "first_gt": wandb.Audio(gt[0, 0, :].cpu().numpy(), sample_rate=sr),
-                "second_gt": wandb.Audio(gt[0, 1, :].cpu().numpy(), sample_rate=sr),
+                "first_predicted": predicted[0, 0, :],
+                "second_predicted": predicted[0, 1, :],
+                "first_gt": gt[0, 0, :],
+                "second_gt": gt[0, 1, :],
             }
-            # wandb.log(audios)
 
             melspec_real = batch["real_melspec"]
             melspec_fake = batch["fake_melspec"]
 
             melspecs = {
-                "first_melspec_predicted": wandb.Image(plot_spectrogram(melspec_fake[0, 0, ...].cpu().detach())),
-                "second_melspec_predicted": wandb.Image(plot_spectrogram(melspec_fake[0, 1, ...].cpu().detach())),
-                "first_melspec_gt": wandb.Image(plot_spectrogram(melspec_real[0, 0, ...].cpu())),
-                "second_melspec_gt": wandb.Image(plot_spectrogram(melspec_real[0, 1, ...].cpu())),
+                "first_melspec_predicted": plot_spectrogram(melspec_fake[0, 0, ...].cpu().detach()),
+                "second_melspec_predicted": plot_spectrogram(melspec_fake[0, 1, ...].cpu().detach()),
+                "first_melspec_gt": plot_spectrogram(melspec_real[0, 0, ...].cpu()),
+                "second_melspec_gt": plot_spectrogram(melspec_real[0, 1, ...].cpu()),
             }
-            wandb.log(audios | melspecs)
+
+            for audio_name, audio in audios.items():
+                self.writer.add_audio(audio_name, audio, sample_rate=sr)
+
+            for melspec_name, melspec in melspecs.items():
+                self.writer.add_image(melspec_name, melspec)

@@ -7,7 +7,7 @@ class A2AHiFiPlusGeneratorBSS(A2AHiFiPlusGeneratorV2):
     @staticmethod
     def get_melspec(x):
         shape = x.shape
-        x = x.view(shape[0] * shape[1], shape[2])
+        x = x.reshape(shape[0] * shape[1], shape[2])
         x = mel_spectrogram(x, 1024, 80, 16000, 256, 1024, 0, 8000)
         if shape[1] > 1:
             x = x.view(shape[0], shape[1], -1, x.shape[-1])

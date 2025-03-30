@@ -55,6 +55,10 @@ def main(config):
     generator_params = filter(lambda p: p.requires_grad, generator.parameters())
     discriminator_params = filter(lambda p: p.requires_grad, discriminator.parameters())
 
+    epoch_len = config.trainer.get("epoch_len")
+    if epoch_len is None:
+        config.lr_scheduler['step_size'] = len(dataloaders['train'])
+
     # print(trainable_params)
     g_optimizer = instantiate(config.optimizer, params=generator_params)
     g_lr_scheduler = instantiate(config.lr_scheduler, optimizer=g_optimizer)
@@ -64,7 +68,6 @@ def main(config):
 
     # epoch_len = number of iterations for iteration-based training
     # epoch_len = None or len(dataloader) for epoch-based training
-    epoch_len = config.trainer.get("epoch_len")
 
     trainer = BSSTrainer(
         generator=generator,

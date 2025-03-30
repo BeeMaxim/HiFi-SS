@@ -518,12 +518,15 @@ class BaseTrainer:
         self.mnt_best = checkpoint["monitor_best"]
 
         # load architecture params from checkpoint.
+        '''
         if checkpoint["config"]["generator"] != self.config["generator"]:
             self.logger.warning(
                 "Warning: Architecture configuration given in the config file is different from that "
                 "of the checkpoint. This may yield an exception when state_dict is loaded."
-            )
-        self.generator.load_state_dict(checkpoint["state_dict"])
+            )'''
+        print(checkpoint.keys())
+        self.generator.load_state_dict(checkpoint["generator_state_dict"])
+        self.discriminator.load_state_dict(checkpoint["discriminator_state_dict"])
 
         # load optimizer state from checkpoint only when optimizer type is not changed.
         if (
@@ -536,8 +539,10 @@ class BaseTrainer:
                 "are not resumed."
             )
         else:
-            self.optimizer.load_state_dict(checkpoint["optimizer"])
-            self.lr_scheduler.load_state_dict(checkpoint["lr_scheduler"])
+            self.g_optimizer.load_state_dict(checkpoint["g_optimizer"])
+            self.d_optimizer.load_state_dict(checkpoint["d_optimizer"])
+            self.g_lr_scheduler.load_state_dict(checkpoint["g_lr_scheduler"])
+            self.d_lr_scheduler.load_state_dict(checkpoint["d_lr_scheduler"])
 
         self.logger.info(
             f"Checkpoint loaded. Resume training from epoch {self.start_epoch}"

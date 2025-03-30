@@ -25,7 +25,7 @@ URL_LINKS = {
 
 
 class LibrispeechMixDataset(BaseDataset):
-    def __init__(self, part, target_sr=16000, data_dir=None, *args, **kwargs):
+    def __init__(self, part, target_sr=16000, segment_size=None, data_dir=None, *args, **kwargs):
         assert part in URL_LINKS or part == "train_all"
 
         if data_dir is None:
@@ -34,6 +34,7 @@ class LibrispeechMixDataset(BaseDataset):
             
         self._data_dir = data_dir
         self.target_sr = target_sr
+        self.segment_size = segment_size
         if part == "train_all":
             index = sum(
                 [
@@ -213,28 +214,28 @@ class LibrispeechMixDataset(BaseDataset):
         if sr != self.target_sr:
             mix_audio = torchaudio.functional.resample(mix_audio, sr, self.target_sr)
 
+        split = 32768 // 4
+
+        audio_start = 0
+
+        audio_len = mix_audio.size(1)
+        if self.segment_size is not None and self.segment_size < audio_len:
+            audio_start = 0 # random chunk?
+            audio_len = self.segment_size
+            mix_audio = mix_audio[:, audio_start : audio_start + audio_len]
+
         audio_list = []
         index_list = []
         for path in ["s1_path", "s2_path"]:
             audio, sr = self.load_audio(data_dict[path])
             if sr != self.target_sr:
                 audio = torchaudio.functional.resample(audio, sr, self.target_sr)
+            audio = audio[:, audio_start : audio_start + audio_len]
 
             audio_list.append(audio)
             speaker_id = Path(path).name.split('-')[0]
             speaker_index = self.index_mapping[speaker_id] if speaker_id in self.index_mapping else -1
             index_list.append(speaker_index)
-            
-        '''
-        s1_audio, sr = self.load_audio(data_dict["s1_path"])
-        if sr != self.target_sr:
-            s1_audio = torchaudio.functional.resample(s1_audio, sr, self.target_sr)
-
-        s2_audio, sr = self.load_audio(data_dict["s2_path"])
-        if sr != self.target_sr:
-            s2_audio = torchaudio.functional.resample(s2_audio, sr, self.target_sr)'''
-
-        audio_len = mix_audio.size(1)
             
         # mix_audio = torch.from_numpy(normalize(mix_audio.numpy(), axis=1) * 0.95)
         # noisy_audio = torch.from_numpy(normalize(noisy_audio.numpy(), axis=1) * 0.95)
