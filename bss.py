@@ -60,10 +60,10 @@ def main(config):
         config.lr_scheduler['step_size'] = len(dataloaders['train'])
 
     # print(trainable_params)
-    g_optimizer = instantiate(config.optimizer, params=generator_params)
+    g_optimizer = instantiate(config.generator_optimizer, params=generator_params)
     g_lr_scheduler = instantiate(config.lr_scheduler, optimizer=g_optimizer)
 
-    d_optimizer = instantiate(config.optimizer, params=discriminator_params)
+    d_optimizer = instantiate(config.discriminator_optimizer, params=discriminator_params)
     d_lr_scheduler = instantiate(config.lr_scheduler, optimizer=d_optimizer)
 
     # epoch_len = number of iterations for iteration-based training

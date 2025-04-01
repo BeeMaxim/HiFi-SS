@@ -6,9 +6,12 @@ defaults:
   - dataloader: example
   - transforms: bss
   - _self_
-optimizer:
+generator_optimizer:
   _target_: torch.optim.Adam
   lr: 2e-4
+discriminator_optimizer:
+  _target_: torch.optim.Adam
+  lr: 1e-4
 lr_scheduler:
   _target_: torch.optim.lr_scheduler.StepLR
   gamma: 0.99
@@ -18,7 +21,7 @@ generator_loss_function:
 discriminator_loss_function:
   _target_: src.loss.DiscriminatorLoss
 trainer:
-  log_step: 500
+  log_step: 50
   n_epochs: 1000
   epoch_len: null
   device_tensors: ["mix_audio", "ids", "audios"] # which tensors should be on device (ex. GPU)
