@@ -25,14 +25,23 @@ URL_LINKS = {
 
 
 class LibrispeechMixDataset(BaseDataset):
-    def __init__(self, part, target_sr=16000, segment_size=None, data_dir=None, *args, **kwargs):
+    def __init__(self, part, target_sr=16000, segment_size=None, data_dir=None, index_dir=None, *args, **kwargs):
         assert part in URL_LINKS or part == "train_all"
 
         if data_dir is None:
             data_dir = ROOT_PATH / "data" / "datasets" / "librispeech"
             data_dir.mkdir(exist_ok=True, parents=True)
+        else:
+            data_dir = Path(data_dir)
+
+        if index_dir is None:
+            index_dir = data_dir
+        else:
+            index_dir = Path(index_dir)
+            index_dir.mkdir(exist_ok=True, parents=True)
             
         self._data_dir = data_dir
+        self._index_dir = index_dir
         self.target_sr = target_sr
         self.segment_size = segment_size
         if part == "train_all":
@@ -52,7 +61,7 @@ class LibrispeechMixDataset(BaseDataset):
         super().__init__(index, *args, **kwargs)
 
     def _load_part(self, part):
-        arch_path = self._data_dir / f"{part}.tar.gz"
+        arch_path = self._index_dir / f"{part}.tar.gz"
         print(f"Loading part {part}")
         wget.download(URL_LINKS[part], str(arch_path))
         shutil.unpack_archive(arch_path, self._data_dir)
@@ -62,7 +71,7 @@ class LibrispeechMixDataset(BaseDataset):
         shutil.rmtree(str(self._data_dir / "LibriSpeech"))
 
     def _get_or_load_index(self, part):
-        index_path = self._data_dir / f"{part}_mix_index.json"
+        index_path = self._index_dir / f"{part}_mix_index.json"
         if index_path.exists():
             with index_path.open() as f:
                 index = json.load(f)
@@ -74,7 +83,7 @@ class LibrispeechMixDataset(BaseDataset):
         return index
 
     def _get_or_load_original_index(self, part):
-        original_index_path = self._data_dir / f"{part}_index.json"
+        original_index_path = self._index_dir / f"{part}_index.json"
         if original_index_path.exists():
             with original_index_path.open() as f:
                 original_index = json.load(f)
@@ -117,16 +126,6 @@ class LibrispeechMixDataset(BaseDataset):
         mix_index = []
         used_pairs = set()
 
-        # Create directories for mixes and sources
-        mix_dir = self._data_dir / "mix" / part
-        mix_dir.mkdir(parents=True, exist_ok=True)
-        s1_dir = mix_dir / "s1"
-        s2_dir = mix_dir / "s2"
-        mix_dir_s = mix_dir / "mix"
-        s1_dir.mkdir(exist_ok=True)
-        s2_dir.mkdir(exist_ok=True)
-        mix_dir_s.mkdir(exist_ok=True)
-
         # Shuffle the original index to randomize pairs
         random.seed(42)
         shuffled_index = original_index.copy()
@@ -148,44 +147,10 @@ class LibrispeechMixDataset(BaseDataset):
                 continue
             used_pairs.add(pair_key)
 
-            # Load audio
-            waveform1, sr1 = torchaudio.load(entry1["path"])
-            waveform2, sr2 = torchaudio.load(entry2["path"])
-
-            # Check sample rate
-            if sr1 != sr2:
-                continue
-
-            # Trim to same length
-            min_len = min(waveform1.size(1), waveform2.size(1))
-            waveform1 = waveform1[:, :min_len]
-            waveform2 = waveform2[:, :min_len]
-
-            # Create mix
-            mix_waveform = (waveform1 + waveform2) / 2
-
-            # Generate filenames
-            base_name1 = Path(entry1["path"]).stem
-            base_name2 = Path(entry2["path"]).stem
-            mix_name = f"{base_name1}_{base_name2}_mix.wav"
-            s1_name = f"{base_name1}_s1.wav"
-            s2_name = f"{base_name2}_s2.wav"
-
-            # Save files
-            mix_path = mix_dir_s / mix_name
-            s1_path = s1_dir / s1_name
-            s2_path = s2_dir / s2_name
-
-            torchaudio.save(str(mix_path), mix_waveform, sr1)
-            torchaudio.save(str(s1_path), waveform1, sr1)
-            torchaudio.save(str(s2_path), waveform2, sr1)
-
             # Add to mix index
             mix_index.append({
-                "mix_path": str(mix_path),
-                "s1_path": str(s1_path),
-                "s2_path": str(s2_path),
-                "audio_len": min_len / sr1
+                "s1_path": entry1["path"],
+                "s2_path": entry2["path"],
             })
 
         return mix_index
@@ -195,7 +160,7 @@ class LibrispeechMixDataset(BaseDataset):
         cur_index = 0
         for item in index:
             for path in ["s1_path", "s2_path"]:
-                speaker_id = Path(path).name.split('-')[0]
+                speaker_id = Path(item[path]).name.split('-')[0]
                 if speaker_id not in index_mapping:
                     index_mapping[speaker_id] = cur_index
                     cur_index += 1
@@ -210,11 +175,19 @@ class LibrispeechMixDataset(BaseDataset):
                 (a single dataset element).
         """
         data_dict = self._index[ind]
-        mix_audio, sr = self.load_audio(data_dict["mix_path"])
-        if sr != self.target_sr:
-            mix_audio = torchaudio.functional.resample(mix_audio, sr, self.target_sr)
+        s1_audio, sr1 = self.load_audio(data_dict["s1_path"])
+        s2_audio, sr2 = self.load_audio(data_dict["s2_path"])
 
-        split = 32768 // 4
+        if sr1 != self.target_sr:
+            s1_audio = torchaudio.functional.resample(s1_audio, sr1, self.target_sr)
+        if sr2 != self.target_sr:
+            s2_audio = torchaudio.functional.resample(s2_audio, sr2, self.target_sr)
+
+        min_len = min(s1_audio.size(1), s2_audio.size(1))
+        s1_audio = s1_audio[:, :min_len]
+        s2_audio = s2_audio[:, :min_len]
+
+        mix_audio = (s1_audio + s2_audio) / 2
 
         audio_start = 0
 
@@ -226,21 +199,13 @@ class LibrispeechMixDataset(BaseDataset):
 
         audio_list = []
         index_list = []
-        for path in ["s1_path", "s2_path"]:
-            audio, sr = self.load_audio(data_dict[path])
-            if sr != self.target_sr:
-                audio = torchaudio.functional.resample(audio, sr, self.target_sr)
+        for audio, audio_path in [(s1_audio, data_dict["s1_path"]), (s2_audio, data_dict["s2_path"])]:
             audio = audio[:, audio_start : audio_start + audio_len]
 
             audio_list.append(audio)
-            speaker_id = Path(path).name.split('-')[0]
+            speaker_id = Path(audio_path).name.split('-')[0]
             speaker_index = self.index_mapping[speaker_id] if speaker_id in self.index_mapping else -1
             index_list.append(speaker_index)
-            
-        # mix_audio = torch.from_numpy(normalize(mix_audio.numpy(), axis=1) * 0.95)
-        # noisy_audio = torch.from_numpy(normalize(noisy_audio.numpy(), axis=1) * 0.95)
-        # file_name = data_dict["file_name"]
-        # print(file_name)
 
         instance_data = {"mix_audio": mix_audio,
                          "audios": torch.cat(audio_list),
@@ -250,4 +215,3 @@ class LibrispeechMixDataset(BaseDataset):
         
         instance_data = self.preprocess_data(instance_data)
         return instance_data
-
