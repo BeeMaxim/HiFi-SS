@@ -229,7 +229,7 @@ class BSSTrainer(BaseTrainer):
     Trainer class. Defines the logic of batch logging and processing.
     """
 
-    def process_batch(self, batch, metrics: MetricTracker):
+    def process_batch(self, batch, batch_idx, metrics: MetricTracker):
         """
         Run batch through the model, compute metrics, compute loss,
         and do training step (during training stage).
@@ -284,7 +284,7 @@ class BSSTrainer(BaseTrainer):
                                                           fake_estimation=fake_estimations["estimation"])
         batch.update(discriminator_loss)
 
-        if self.is_train:
+        if self.is_train and batch_idx % self.discriminator_update == 0:
             batch["discriminator_loss"].backward()
             self._clip_grad_norm()
             self.d_optimizer.step()

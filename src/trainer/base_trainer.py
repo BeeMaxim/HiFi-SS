@@ -99,6 +99,8 @@ class BaseTrainer:
         self.start_epoch = 1
         self.epochs = self.cfg_trainer.n_epochs
 
+        self.discriminator_update = config.trainer.discriminator_update
+
         # configuration to monitor generator performance and save best
 
         self.save_period = (
@@ -217,6 +219,7 @@ class BaseTrainer:
             try:
                 batch = self.process_batch(
                     batch,
+                    batch_idx,
                     metrics=self.train_metrics,
                 )
             except torch.cuda.OutOfMemoryError as e:
@@ -392,6 +395,9 @@ class BaseTrainer:
         if self.config["trainer"].get("max_grad_norm", None) is not None:
             clip_grad_norm_(
                 self.generator.parameters(), self.config["trainer"]["max_grad_norm"]
+            )
+            clip_grad_norm_(
+                self.discriminator.parameters(), self.config["trainer"]["max_grad_norm"]
             )
 
     @torch.no_grad()
