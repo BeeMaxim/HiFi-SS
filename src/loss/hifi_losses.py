@@ -113,7 +113,7 @@ class BSSGeneratorLoss(nn.Module):
                 for d in real_estimations["fmap"]:
                     for fmap in d:
                         fmap_r.append(fmap[b:b+1, ...])
-                cur_loss[b] += feature_loss(fmap_f, fmap_r)
+                cur_loss[b] += 2 * feature_loss(fmap_f, fmap_r)
 
                 if losses[b] is None or cur_loss[b] < losses[b]:
                     losses[b] = cur_loss[b]
@@ -150,7 +150,7 @@ class BSSGeneratorLoss(nn.Module):
         real_estimations = discriminator(audios, ids)
 
         losses = {}
-        losses["feature_loss"] = feature_loss(real_estimations["fmap"], fake_estimations["fmap"])
+        losses["feature_loss"] = 2 * feature_loss(real_estimations["fmap"], fake_estimations["fmap"])
         losses["g_loss"] = generator_loss(fake_estimations["estimation"])[0]
         losses["l1_loss"] = F.l1_loss(mel_reordered, real_melspec)
         losses["snr_loss"] = -self.si_snr_loss(reordered, audios)

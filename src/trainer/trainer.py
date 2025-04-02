@@ -229,7 +229,7 @@ class BSSTrainer(BaseTrainer):
     Trainer class. Defines the logic of batch logging and processing.
     """
 
-    def process_batch(self, batch, batch_idx, metrics: MetricTracker):
+    def process_batch(self, batch, metrics: MetricTracker, batch_idx=0):
         """
         Run batch through the model, compute metrics, compute loss,
         and do training step (during training stage).

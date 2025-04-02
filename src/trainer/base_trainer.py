@@ -219,8 +219,8 @@ class BaseTrainer:
             try:
                 batch = self.process_batch(
                     batch,
-                    batch_idx,
                     metrics=self.train_metrics,
+                    batch_idx=batch_idx
                 )
             except torch.cuda.OutOfMemoryError as e:
                 if self.skip_oom:
