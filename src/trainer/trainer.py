@@ -280,8 +280,10 @@ class BSSTrainer(BaseTrainer):
 
         fake_estimations = self.discriminator(reordered.detach(), ids=batch["ids"])
         real_estimations = self.discriminator(batch["audios"], ids=batch["ids"])
+        mix_estimations = self.discriminator(batch["mix_audio"], ids=None)
         discriminator_loss = self.discriminator_criterion(real_estimation=real_estimations["estimation"],
-                                                          fake_estimation=fake_estimations["estimation"])
+                                                          fake_estimation=fake_estimations["estimation"],
+                                                          mix_estimation=mix_estimations["estimation"])
         batch.update(discriminator_loss)
 
         if self.is_train and batch_idx % self.discriminator_update == 0:
