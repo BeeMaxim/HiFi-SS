@@ -4,5 +4,5 @@ entity: null
 run_name: "testing"
 mode: "online"
 loss_names: ["discriminator_loss", "feature_loss", "g_loss", "l1_loss", "generator_loss"] # which losses to log (useful for multi-loss tasks, s.a. GANs)
-log_checkpoints: True # set to True if you want to log save_dir with checkpoints to W&B
+log_checkpoints: False # set to True if you want to log save_dir with checkpoints to W&B
 id_length: 8 # length of the run_id

@@ -83,6 +83,7 @@ class A2AHiFiPlusGeneratorBSSV2(A2AHiFiPlusGeneratorV2):
         return x
     
     def forward(self, mix_audio, **batch):
+        target_norm = mix_audio.pow(2).mean(dim=-1, keepdim=True).sqrt().detach()
         x = mix_audio
         x_orig = x.clone()
 
@@ -115,6 +116,10 @@ class A2AHiFiPlusGeneratorBSSV2(A2AHiFiPlusGeneratorV2):
         x = torch.cat([masked_1, masked_2], dim=1)
 
         x = torch.tanh(x)
+        current_norm = x.pow(2).mean(dim=-1, keepdim=True).sqrt().detach()
+
+        x = x * (target_norm / (current_norm + 1e-12))
+
         mel_spec_after = self.get_melspec(x)
 
         return {"separated_audios": x, "fake_melspec": mel_spec_after}
