@@ -5,7 +5,7 @@ train:
   data_dir: D:\HiFi-SS\data\datasets\librispeech
   index_dir: indexes
   instance_transforms: ${transforms.instance_transforms.train}
-  limit: 20000
+  limit: 10000
 test:
   _target_: src.datasets.LibrispeechMixDataset
   part: "test-clean"
