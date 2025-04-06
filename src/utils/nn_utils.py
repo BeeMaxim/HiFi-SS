@@ -633,7 +633,7 @@ class SpectralMaskNet(nn.Module):
         win_length = n_fft
         hop_length = n_fft // 4
         f_hat = torch.stft(
-            x.view(x.shape[0] * x.shape[1], -1),
+            x.reshape(x.shape[0] * x.shape[1], -1), # view
             n_fft=n_fft,
             center=True,
             hop_length=hop_length,

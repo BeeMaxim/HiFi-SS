@@ -1,5 +1,5 @@
 defaults:
-  - model: conv_tas_net
+  - model: bss_v2
   - _self_
 trainer:
   device: auto

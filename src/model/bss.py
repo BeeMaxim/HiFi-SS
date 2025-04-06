@@ -52,6 +52,7 @@ class A2AHiFiPlusGeneratorBSSV2(A2AHiFiPlusGeneratorV2):
         super().__init__(*args, **kwargs)
 
         ch = self.hifi.out_channels
+        self.ch = ch
 
         self.mask1 = nn_utils.SpectralMaskNet(
                 in_ch=ch,
@@ -63,6 +64,23 @@ class A2AHiFiPlusGeneratorBSSV2(A2AHiFiPlusGeneratorV2):
                 in_ch=ch,
                 block_widths=(8, 12, 24, 32),
                 block_depth=4,
+                norm_type='weight'
+            )
+        
+        self.waveunet1 = nn_utils.MultiScaleResnet(
+                (10, 20, 40, 80),
+                4,
+                mode="waveunet_k5",
+                out_width=ch,
+                in_width=ch,
+                norm_type='weight'
+            )
+        self.waveunet2 = nn_utils.MultiScaleResnet(
+                (10, 20, 40, 80),
+                4,
+                mode="waveunet_k5",
+                out_width=ch,
+                in_width=ch,
                 norm_type='weight'
             )
         
@@ -94,12 +112,17 @@ class A2AHiFiPlusGeneratorBSSV2(A2AHiFiPlusGeneratorV2):
         x = self.apply_spectralunet(x)
 
         x = self.hifi(x)
-
+        
         if self.use_waveunet and self.waveunet_before_spectralmasknet and not self.hifi.return_stft:
             x = self.apply_waveunet_a2a(x, x_orig)
 
+        #masked_1 = self.mask1(x[:, :self.ch // 2, :])
+        #masked_2 = self.mask2(x[:, self.ch // 2:, :])
         masked_1 = self.mask1(x)
         masked_2 = self.mask2(x)
+
+        #masked_1 = self.waveunet1(masked_1)
+        #masked_2 = self.waveunet2(masked_2)
 
         #masked_1 += self.spectralmasknet_skip_connect(x)
         #masked_2 += self.spectralmasknet_skip_connect(x)
@@ -116,9 +139,14 @@ class A2AHiFiPlusGeneratorBSSV2(A2AHiFiPlusGeneratorV2):
         x = torch.cat([masked_1, masked_2], dim=1)
 
         x = torch.tanh(x)
-        current_norm = x.pow(2).mean(dim=-1, keepdim=True).sqrt().detach()
+        current_norm = x.pow(2).mean(dim=-1, keepdim=True).sqrt()
 
-        x = x * (target_norm / (current_norm + 1e-12))
+        # 
+        # x = x * (target_norm / (current_norm + 1e-12))
+        '''
+        print(target_norm, current_norm)
+        print(target_norm / current_norm)
+        print('---------------------------')'''
 
         mel_spec_after = self.get_melspec(x)
 
