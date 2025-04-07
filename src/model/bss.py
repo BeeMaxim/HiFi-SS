@@ -54,57 +54,48 @@ class A2AHiFiPlusGeneratorBSSV2(A2AHiFiPlusGeneratorV2):
         ch = self.hifi.out_channels
         self.ch = ch
 
+        self.sep = nn.Sequential(
+            nn.Conv2d(1, 64, (5, 5), padding="same"),
+            nn.ReLU(),
+            nn.Conv2d(64, 2, (5, 5), padding="same"),
+            nn.Sigmoid()
+        )
+
         self.mask1 = nn_utils.SpectralMaskNet(
-                in_ch=ch // 2,
+                in_ch=ch,
                 block_widths=(8, 12, 24, 32),
                 block_depth=4,
                 norm_type='weight'
             )
         self.mask2 = nn_utils.SpectralMaskNet(
-                in_ch=ch // 2,
+                in_ch=ch,
                 block_widths=(8, 12, 24, 32),
                 block_depth=4,
                 norm_type='weight'
             )
         
-        self.sep1 = nn_utils.MultiScaleResnet(
-                (10, 20, 40),
-                3,
-                mode="waveunet_k5",
-                out_width=64,
-                in_width=64,
-                norm_type='weight'
-            )
-        
-        self.sep2 = nn_utils.MultiScaleResnet(
-                (10, 20, 40),
-                3,
-                mode="waveunet_k5",
-                out_width=64,
-                in_width=64,
-                norm_type='weight'
-            )
+        self.masks = nn.Conv1d(128, 256, 1)
         
         self.waveunet1 = nn_utils.MultiScaleResnet(
                 (10, 20, 40, 80),
                 4,
                 mode="waveunet_k5",
-                out_width=ch // 2,
-                in_width=ch // 2,
+                out_width=ch,
+                in_width=ch,
                 norm_type='weight'
             )
         self.waveunet2 = nn_utils.MultiScaleResnet(
                 (10, 20, 40, 80),
                 4,
                 mode="waveunet_k5",
-                out_width=ch // 2,
-                in_width=ch // 2,
+                out_width=ch,
+                in_width=ch,
                 norm_type='weight'
             )
         
-        self.conv_post1 = self.norm(nn.Conv1d(ch // 2, 1, 7, 1, padding=3))
+        self.conv_post1 = self.norm(nn.Conv1d(ch, 1, 7, 1, padding=3))
         self.conv_post1.apply(nn_utils.init_weights)
-        self.conv_post2 = self.norm(nn.Conv1d(ch // 2, 1, 7, 1, padding=3))
+        self.conv_post2 = self.norm(nn.Conv1d(ch, 1, 7, 1, padding=3))
         self.conv_post2.apply(nn_utils.init_weights)
 
     @staticmethod
@@ -129,27 +120,29 @@ class A2AHiFiPlusGeneratorBSSV2(A2AHiFiPlusGeneratorV2):
         mel_spec_before = x.clone()
         x = self.apply_spectralunet(x)
 
-        sep1 = x[:, :64, :].clone()
-        sep2 = x[:, 64:, :].clone()
+        masked = self.sep(x.unsqueeze(1))
 
-        sep1 = self.sep1(sep1)
-        sep2 = self.sep2(sep2)
+        masked1 = masked[:, 0, ...]
+        masked2 = masked[:, 1, ...]
 
-
-        x = torch.cat([sep1, sep2], dim=1)
+        # x = self.hifi(x)
         
-        x = self.hifi(x)
-        
+        masked1 = self.hifi(x * masked1)
+        masked2 = self.hifi(x * masked2)
+
+        masked1 = self.apply_waveunet_a2a(masked1, x_orig)
+        masked2 = self.apply_waveunet_a2a(masked2, x_orig)
+        '''
         if self.use_waveunet and self.waveunet_before_spectralmasknet and not self.hifi.return_stft:
-            x = self.apply_waveunet_a2a(x, x_orig)
+            x = self.apply_waveunet_a2a(x, x_orig)'''
 
-        masked_1 = self.mask1(x[:, :self.ch // 2, :])
-        masked_2 = self.mask2(x[:, self.ch // 2:, :])
+        masked1 = self.mask1(masked1)
+        masked2 = self.mask2(masked2)
         #masked_1 = self.mask1(x)
         #masked_2 = self.mask2(x)
 
-        masked_1 = self.waveunet1(masked_1)
-        masked_2 = self.waveunet2(masked_2)
+        masked1 = self.waveunet1(masked1)
+        masked2 = self.waveunet2(masked2)
 
         #masked_1 += self.spectralmasknet_skip_connect(x)
         #masked_2 += self.spectralmasknet_skip_connect(x)
@@ -159,11 +152,11 @@ class A2AHiFiPlusGeneratorBSSV2(A2AHiFiPlusGeneratorV2):
 
         # x = self.conv_post(x)
 
-        masked_1 = self.conv_post1(masked_1)
-        masked_2 = self.conv_post2(masked_2)
+        masked1 = self.conv_post1(masked1)
+        masked2 = self.conv_post2(masked2)
 
 
-        x = torch.cat([masked_1, masked_2], dim=1)
+        x = torch.cat([masked1, masked2], dim=1)
 
         x = torch.tanh(x)
         current_norm = x.pow(2).mean(dim=-1, keepdim=True).sqrt()
