@@ -57,6 +57,32 @@ class A2AHiFiPlusGeneratorBSSV2(A2AHiFiPlusGeneratorV2):
         ch = self.hifi.out_channels
         self.ch = ch
 
+        self.hi1 = nn_utils.MultiScaleResnet(
+                (10, 20, 40, 80),
+                4,
+                mode="waveunet_k5",
+                out_width=64,
+                in_width=1,
+                norm_type='weight'
+            )
+        self.hi2 = nn_utils.MultiScaleResnet(
+                (10, 20, 40, 80),
+                4,
+                mode="waveunet_k5",
+                out_width=64,
+                in_width=64,
+                norm_type='weight'
+            )
+        self.hi3 = nn_utils.MultiScaleResnet(
+                (10, 20, 40, 80),
+                4,
+                mode="waveunet_k5",
+                out_width=8,
+                in_width=64,
+                norm_type='weight'
+            )
+
+
         self.mask1 = nn_utils.SpectralMaskNet(
                 in_ch=ch // 2,
                 block_widths=(8, 12, 24, 32),
@@ -70,24 +96,7 @@ class A2AHiFiPlusGeneratorBSSV2(A2AHiFiPlusGeneratorV2):
                 norm_type='weight'
             )
         
-        self.sep1 = nn_utils.MultiScaleResnet(
-                (10, 20, 40),
-                3,
-                mode="waveunet_k5",
-                out_width=64 * 2,
-                in_width=64,
-                norm_type='weight'
-            )
-        
-        self.sep2 = nn_utils.MultiScaleResnet(
-                (10, 20, 40),
-                3,
-                mode="waveunet_k5",
-                out_width=64 * 2,
-                in_width=64,
-                norm_type='weight'
-            )
-        
+    
         self.waveunet1 = nn_utils.MultiScaleResnet(
                 (10, 20, 40, 80),
                 4,
@@ -144,7 +153,7 @@ class A2AHiFiPlusGeneratorBSSV2(A2AHiFiPlusGeneratorV2):
         x_orig = x.clone()
 
         # x_orig = x_orig[:, :, : x_orig.shape[2] // 1024 * 1024]
-        x = self.get_melspec(x)
+        # x = self.get_melspec(x)
 
         mel_spec_before = x.clone()
         # x = self.apply_spectralunet(x)
@@ -159,7 +168,11 @@ class A2AHiFiPlusGeneratorBSSV2(A2AHiFiPlusGeneratorV2):
         #sep2 = self.hifi(sep2)
         #x = torch.cat([sep1, sep2], dim=1)
         
-        x = self.hifi(x)
+        # x = self.hifi(x)
+
+        x = self.hi1(x)
+        x = self.hi2(x)
+        x = self.hi3(x)
         
         if self.use_waveunet and self.waveunet_before_spectralmasknet and not self.hifi.return_stft:
             x = self.apply_waveunet_a2a(x, x_orig)
