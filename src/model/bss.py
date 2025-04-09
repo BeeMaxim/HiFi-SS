@@ -105,6 +105,23 @@ class A2AHiFiPlusGeneratorBSSV2(A2AHiFiPlusGeneratorV2):
                 norm_type='weight'
             )
         
+        self.waveunet11 = nn_utils.MultiScaleResnet(
+                (10, 20, 40, 80),
+                4,
+                mode="waveunet_k5",
+                out_width=ch // 2,
+                in_width=ch // 2 + ch // 4,
+                norm_type='weight'
+            )
+        self.waveunet12 = nn_utils.MultiScaleResnet(
+                (10, 20, 40, 80),
+                4,
+                mode="waveunet_k5",
+                out_width=ch // 2,
+                in_width=ch // 2 + ch // 4,
+                norm_type='weight'
+            )
+        
         self.conv_post1 = self.norm(nn.Conv1d(ch // 2, 1, 7, 1, padding=3))
         self.conv_post1.apply(nn_utils.init_weights)
         self.conv_post2 = self.norm(nn.Conv1d(ch // 2, 1, 7, 1, padding=3))
@@ -149,11 +166,12 @@ class A2AHiFiPlusGeneratorBSSV2(A2AHiFiPlusGeneratorV2):
 
         masked_1 = self.mask1(x[:, :self.ch // 2, :])
         masked_2 = self.mask2(x[:, self.ch // 2:, :])
-        #masked_1 = self.mask1(x)
-        #masked_2 = self.mask2(x)
 
         masked_1 = self.waveunet1(masked_1)
         masked_2 = self.waveunet2(masked_2)
+
+        masked_11 = self.waveunet11(torch.cat([masked_1, masked_2[:, :self.ch // 4, :]], dim=1))
+        masked_12 = self.waveunet12(torch.cat([masked_2, masked_1[:, :self.ch // 4, :]], dim=1))
 
         #masked_1 += self.spectralmasknet_skip_connect(x)
         #masked_2 += self.spectralmasknet_skip_connect(x)
@@ -163,8 +181,8 @@ class A2AHiFiPlusGeneratorBSSV2(A2AHiFiPlusGeneratorV2):
 
         # x = self.conv_post(x)
 
-        masked_1 = self.conv_post1(masked_1)
-        masked_2 = self.conv_post2(masked_2)
+        masked_1 = self.conv_post1(masked_11)
+        masked_2 = self.conv_post2(masked_12)
 
 
         x = torch.cat([masked_1, masked_2], dim=1)
@@ -229,6 +247,23 @@ class A2AHiFiPlusGeneratorBSSV3(nn.Module):
                 norm_type='weight'
             )
         
+        self.post1 = nn_utils.MultiScaleResnet(
+                (10, 20, 40, 80),
+                4,
+                mode="waveunet_k5",
+                out_width=8,
+                in_width=10,
+                norm_type='weight'
+            )
+        self.post2 = nn_utils.MultiScaleResnet(
+                (10, 20, 40, 80),
+                4,
+                mode="waveunet_k5",
+                out_width=8,
+                in_width=10,
+                norm_type='weight'
+            )
+        
         self.conv_post1 = weight_norm(nn.Conv1d(ch, 1, 7, 1, padding=3))
         self.conv_post1.apply(nn_utils.init_weights)
         self.conv_post2 = weight_norm(nn.Conv1d(ch, 1, 7, 1, padding=3))
@@ -254,10 +289,14 @@ class A2AHiFiPlusGeneratorBSSV3(nn.Module):
         x1 = self.hifi1(mel1)
         x2 = self.hifi2(mel2)
 
-        x1 = self.conv_post1(x1)
-        x2 = self.conv_post2(x2)
+        y1 = self.post1(torch.cat([x1, x_orig, x2[:, 0:1, :]], dim=1))
+        y2 = self.post2(torch.cat([x2, x_orig, x1[:, 0:1, :]], dim=1))
 
-        x = torch.cat([x1, x2], dim=1)
+        y1 = self.conv_post1(y1)
+        y2 = self.conv_post2(y2)
+
+        x = torch.cat([y1, y2], dim=1)
+        x = torch.tanh(x)
 
         mel_spec_after = self.get_melspec(x)
 

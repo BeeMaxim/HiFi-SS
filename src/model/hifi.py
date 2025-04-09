@@ -233,10 +233,10 @@ class A2AHiFiPlusGeneratorV2(HiFiPlusGenerator):
         spectralmasknet_block_depth=4,
 
         norm_type: Literal["weight", "spectral"] = "weight",
-        use_skip_connect=False,
+        use_skip_connect=True,
         waveunet_before_spectralmasknet=True,
 
-        waveunet_input: Literal["waveform", "hifi", "both"] = "hifi",
+        waveunet_input: Literal["waveform", "hifi", "both"] = "both",
         out_channels=1
     ):
         super().__init__(

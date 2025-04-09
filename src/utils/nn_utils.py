@@ -438,7 +438,7 @@ class HiFiGeneratorBackbone(torch.nn.Module):
                 input_channels, upsample_initial_channel, kernel_size, 1, padding=kernel_size // 2
             )
         )
-        # self.conv_pre.apply(init_weights)
+        self.conv_pre.apply(init_weights)
 
     def make_resblocks(
         self,
@@ -480,7 +480,7 @@ class HiFiGeneratorBackbone(torch.nn.Module):
                 self.resblocks.append(
                     resblock(ch, k, d, norm_type=self.norm_type)
                 )
-        # self.ups.apply(init_weights)
+        self.ups.apply(init_weights)
         return ch
     
     def forward(self, x):
