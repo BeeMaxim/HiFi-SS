@@ -24,11 +24,11 @@ class DiscriminatorP(torch.nn.Module):
         if channel_count != 1:
             init_channels = channel_count
         self.convs = nn.ModuleList([
-            norm_f(Conv2d(init_channels, 32, (kernel_size, 1), (stride, 1), padding=(2, 0))),
-            norm_f(Conv2d(32, 128, (kernel_size, 1), (stride, 1), padding=(2, 0))),
-            norm_f(Conv2d(128, 512, (kernel_size, 1), (stride, 1), padding=(2, 0))),
-            norm_f(Conv2d(512, 1024, (kernel_size, 1), (stride, 1), padding=(2, 0))),
-            norm_f(Conv2d(1024, 1024, (kernel_size, 1), 1, padding=(2, 0))),
+            norm_f(Conv2d(init_channels, 32, (kernel_size, channel_count), (stride, 1), padding=(2, channel_count // 2))),
+            norm_f(Conv2d(32, 128, (kernel_size, channel_count), (stride, 1), padding=(2, channel_count // 2))),
+            norm_f(Conv2d(128, 512, (kernel_size, channel_count), (stride, 1), padding=(2, channel_count // 2))),
+            norm_f(Conv2d(512, 1024, (kernel_size, channel_count), (stride, 1), padding=(2, channel_count // 2))),
+            norm_f(Conv2d(1024, 1024, (kernel_size, channel_count), 1, padding=(2, channel_count // 2))),
         ])
         
         if use_id_channel:
