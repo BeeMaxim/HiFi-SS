@@ -1,0 +1,10 @@
+defaults:
+  - model: bss_test
+  - datasets: librispeech_mix
+  - dataloader: example
+  - transforms: bss
+  - _self_
+trainer:
+  device: auto
+  save_path: "analysis"
+  seed: 1

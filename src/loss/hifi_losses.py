@@ -92,14 +92,14 @@ class BSSGeneratorLoss(nn.Module):
         st = time.time()
         
         with torch.no_grad():
-            real_estimations = discriminator(audios, ids)
+            real_estimations = discriminator(torch.cat([audios, batch["mix_audio"]], dim=1), ids)
 
         for p in permutations:
         
             bef = time.time()
             
             with torch.no_grad():
-                discriminator_estimations = discriminator(separated_audios[:, p, :], ids)
+                discriminator_estimations = discriminator(torch.cat([separated_audios[:, p, :], batch["mix_audio"]], dim=1), ids)
 
             cur_loss = [0] * B
             for b in range(B):
@@ -164,14 +164,14 @@ class BSSGeneratorLoss(nn.Module):
         reordered = separated_audios[torch.arange(separated_audios.shape[0])[:, None], order]
         mel_reordered = fake_melspec[torch.arange(fake_melspec.shape[0])[:, None], order]
 
-        fake_estimations = discriminator(reordered, ids)
-        real_estimations = discriminator(audios, ids)
+        fake_estimations = discriminator(torch.cat([reordered, batch["mix_audio"]], dim=1), ids)
+        real_estimations = discriminator(torch.cat([audios, batch["mix_audio"]], dim=1), ids)
 
         losses = {}
         losses["feature_loss"] = feature_loss(real_estimations["fmap"], fake_estimations["fmap"])
         losses["g_loss"] = generator_loss(fake_estimations["estimation"])[0]
         losses["l1_loss"] = F.l1_loss(mel_reordered, real_melspec)
-        losses["snr_loss"] = -self.si_snr_loss(reordered, audios)
+        losses["snr_loss"] = -self.si_snr_loss(reordered, audios)# + self.si_snr_loss(reordered[:, 0, :], reordered[:, 1, :]) / 4
         # print('total', losses['snr_loss'])
         losses["generator_loss"] = losses["feature_loss"] + losses["g_loss"] + losses["snr_loss"]
         # losses["generator_loss"] = losses["snr_loss"] * 1

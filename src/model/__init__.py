@@ -1,5 +1,5 @@
 from src.model.hifi import A2AHiFiPlusGeneratorV2
-from src.model.bss import A2AHiFiPlusGeneratorBSS, A2AHiFiPlusGeneratorBSSV2, A2AHiFiPlusGeneratorBSSV3
+from src.model.bss import A2AHiFiPlusGeneratorBSS, A2AHiFiPlusGeneratorBSSV2, A2AHiFiPlusGeneratorBSSV3, TestModel
 from src.model.disriminators import Discriminator
 from src.model.generator.istftnet import Generator
 from src.model.conv_tas_net import ConvTasNet, TasNet
@@ -13,5 +13,6 @@ __all__ = [
     "BSSDiscriminator",
     "ConvTasNet",
     "Generator",
-    "TasNet"
+    "TasNet",
+    "TestModel"
 ]

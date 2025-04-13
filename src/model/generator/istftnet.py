@@ -124,6 +124,9 @@ class Generator(torch.nn.Module):
         self.conv_post.apply(init_weights)
         self.reflection_pad = torch.nn.ReflectionPad1d((1, 0))
 
+        self.conv_adapt = nn.Conv1d(1, 8, 7, 1, padding=3)
+        self.out_channels = 8
+
         self.stft = TorchSTFT(filter_length=gen_istft_n_fft, hop_length=gen_istft_hop_size, win_length=gen_istft_n_fft)
 
     def forward(self, x):
@@ -144,6 +147,7 @@ class Generator(torch.nn.Module):
         spec = torch.exp(x[:,:self.post_n_fft // 2 + 1, :])
         phase = torch.sin(x[:, self.post_n_fft // 2 + 1:, :])
         res = self.stft.inverse(spec, phase)
-        print(res.isnan().any())
+        # print(res.isnan().any())
+        res = self.conv_adapt(res)
         return res
     

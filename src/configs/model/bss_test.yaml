@@ -1,0 +1,5 @@
+_target_: src.model.TestModel
+use_waveunet: True
+out_channels: 2
+defaults:
+  - generator: classic

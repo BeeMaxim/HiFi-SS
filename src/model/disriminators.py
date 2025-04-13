@@ -15,11 +15,14 @@ class DiscriminatorP(torch.nn.Module):
                  use_spectral_norm=False, 
                  use_id_channel=False,
                  embedding_dim=4,
-                 embedding_count=0):
+                 embedding_count=0,
+                 channel_count=1):
         super(DiscriminatorP, self).__init__()
         self.period = period
         norm_f = weight_norm if use_spectral_norm == False else spectral_norm
         init_channels = 1 + embedding_dim if use_id_channel else 1
+        if channel_count != 1:
+            init_channels = channel_count
         self.convs = nn.ModuleList([
             norm_f(Conv2d(init_channels, 32, (kernel_size, 1), (stride, 1), padding=(2, 0))),
             norm_f(Conv2d(32, 128, (kernel_size, 1), (stride, 1), padding=(2, 0))),
@@ -89,10 +92,13 @@ class DiscriminatorS(torch.nn.Module):
                  use_spectral_norm=False,
                  use_id_channel=False,
                  embedding_dim=4,
-                 embedding_count=0):
+                 embedding_count=0,
+                 channel_count=1):
         super(DiscriminatorS, self).__init__()
         norm_f = weight_norm if use_spectral_norm == False else spectral_norm
         init_channels = 1 + embedding_dim if use_id_channel else 1
+        if channel_count != 1:
+            init_channels = channel_count
         self.convs = nn.ModuleList([
             norm_f(Conv1d(init_channels, 128, 15, 1, padding=7)),
             norm_f(Conv1d(128, 128, 41, 2, groups=4, padding=20)),
@@ -155,19 +161,24 @@ class MultiScaleDiscriminator(torch.nn.Module):
     
 
 class BSSDiscriminator(nn.Module):
-    def __init__(self, use_id_channel=False, embedding_dim=4, embedding_count=0):
+    def __init__(self, use_id_channel=False, embedding_dim=4, embedding_count=0, channel_count=1):
         super().__init__()
+
+        self.channels = channel_count
 
         self.mpd = MultiPeriodDiscriminator(use_id_channel=use_id_channel, 
                                             embedding_dim=embedding_dim, 
-                                            embedding_count=embedding_count)
+                                            embedding_count=embedding_count,
+                                            channel_count=channel_count)
         self.msd = MultiScaleDiscriminator(use_id_channel=use_id_channel, 
                                             embedding_dim=embedding_dim, 
-                                            embedding_count=embedding_count)
+                                            embedding_count=embedding_count,
+                                            channel_count=channel_count)
 
     def forward(self, audios, ids=None, **batch):
         B, C, _ = audios.shape
-        audios = audios.reshape(B * C, 1, -1)
+        if self.channels != C:
+            audios = audios.reshape(B * C, 1, -1)
         if ids is not None:
             ids = ids.flatten()
         res = self.mpd(audios, ids)
@@ -175,9 +186,10 @@ class BSSDiscriminator(nn.Module):
         for key, value in self.msd(audios, ids).items():
             res[key].extend(value)
 
-        res["estimation"] = [x.reshape(B, C, -1) for x in res["estimation"]]
-        for i in range(len(res["fmap"])):
-            res["fmap"][i] = [x.reshape(B, C, *x.shape[1:]) for x in res["fmap"][i]]
+        if self.channels != C:
+            res["estimation"] = [x.reshape(B, C, -1) for x in res["estimation"]]
+            for i in range(len(res["fmap"])):
+                res["fmap"][i] = [x.reshape(B, C, *x.shape[1:]) for x in res["fmap"][i]]
 
         return res
     
