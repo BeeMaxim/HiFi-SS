@@ -7,6 +7,50 @@ import torch.nn as nn
 
 import copy
 
+LRELU_SLOPE = 0.1
+
+
+class ResBlock(nn.Module):
+    def __init__(self, kernel_size, channels, D_r): # D_r[n]
+        super().__init__()
+
+        self.convs = nn.ModuleList()
+
+        for m in range(len(D_r)):
+            layer = nn.ModuleList()
+            for l in range(len(D_r[m])):
+                layer.append(nn.Sequential(
+                    nn.LeakyReLU(LRELU_SLOPE),
+                    nn.Conv1d(in_channels=channels, out_channels=channels, kernel_size=kernel_size, dilation=D_r[m][l], padding="same")
+                ))
+            self.convs.append(layer)
+
+    def forward(self, x):
+        for conv in self.convs:
+            for layer in conv:
+                y = layer(x)
+            x = x + y
+        return x
+
+
+class MRF(nn.Module):
+    def __init__(self, channels, k_r, D_r):
+        super().__init__()
+
+        self.res_blocks = nn.ModuleList()
+
+        for n in range(len(k_r)):
+            self.res_blocks.append(ResBlock(k_r[n], channels, D_r[n]))
+
+    def forward(self, x):
+        res = None
+        for res_block in self.res_blocks:
+            if res is None:
+                res = res_block(x)
+            else:
+                res = res + res_block(x)
+        return res / len(self.res_blocks)
+
 
 class A2AHiFiPlusGeneratorBSS(A2AHiFiPlusGeneratorV2):
     @staticmethod
@@ -112,6 +156,9 @@ class A2AHiFiPlusGeneratorBSSV2(A2AHiFiPlusGeneratorV2):
                 in_width=ch // 2 + 1,
                 norm_type='weight'
             )
+        
+        self.mrf1 = MRF(5, [3, 7, 11], [[[1, 1], [3, 1], [5, 1]], [[1, 1], [3, 1], [5, 1]], [[1, 1], [3, 1], [5, 1]]])
+        self.mrf2 = MRF(5, [3, 7, 11], [[[1, 1], [3, 1], [5, 1]], [[1, 1], [3, 1], [5, 1]], [[1, 1], [3, 1], [5, 1]]])
         '''
         self.waveunet11 = nn_utils.MultiScaleResnet(
                 (10, 20, 40, 80),
@@ -130,9 +177,9 @@ class A2AHiFiPlusGeneratorBSSV2(A2AHiFiPlusGeneratorV2):
                 norm_type='weight'
             )'''
         
-        self.conv_post1 = self.norm(nn.Conv1d(ch // 2, 1, 7, 1, padding=3))
+        self.conv_post1 = self.norm(nn.Conv1d(ch // 2 + 1, 1, 7, 1, padding=3))
         self.conv_post1.apply(nn_utils.init_weights)
-        self.conv_post2 = self.norm(nn.Conv1d(ch // 2, 1, 7, 1, padding=3))
+        self.conv_post2 = self.norm(nn.Conv1d(ch // 2 + 1, 1, 7, 1, padding=3))
         self.conv_post2.apply(nn_utils.init_weights)
 
     @staticmethod
@@ -179,8 +226,10 @@ class A2AHiFiPlusGeneratorBSSV2(A2AHiFiPlusGeneratorV2):
         masked_1 = self.mask1(x[:, :self.ch // 2, :])
         masked_2 = self.mask2(x[:, self.ch // 2:, :])
 
-        masked_1 = self.waveunet1(torch.cat([masked_1, x_orig], dim=1))
-        masked_2 = self.waveunet2(torch.cat([masked_2, x_orig], dim=1))
+        #masked_1 = self.waveunet1(torch.cat([masked_1, x_orig], dim=1))
+        #masked_2 = self.waveunet2(torch.cat([masked_2, x_orig], dim=1))
+        masked_1 = self.mrf1(torch.cat([masked_1, x_orig], dim=1))
+        masked_2 = self.mrf2(torch.cat([masked_2, x_orig], dim=1))
 
         #masked_11 = self.waveunet11(torch.cat([masked_1, masked_2[:, :self.ch // 4, :]], dim=1))
         #masked_12 = self.waveunet12(torch.cat([masked_2, masked_1[:, :self.ch // 4, :]], dim=1))

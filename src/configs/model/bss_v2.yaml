@@ -2,4 +2,4 @@ _target_: src.model.A2AHiFiPlusGeneratorBSSV2
 use_waveunet: True
 out_channels: 2
 defaults:
-  - generator: istftnet_c8c8i
+  - generator: classic
