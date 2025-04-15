@@ -145,7 +145,7 @@ class A2AHiFiPlusGeneratorBSSV2(A2AHiFiPlusGeneratorV2):
                 4,
                 mode="waveunet_k5",
                 out_width=ch // 2,
-                in_width=ch // 2,
+                in_width=ch // 2 + 1,
                 norm_type='weight'
             )
         self.waveunet2 = nn_utils.MultiScaleResnet(
@@ -153,7 +153,7 @@ class A2AHiFiPlusGeneratorBSSV2(A2AHiFiPlusGeneratorV2):
                 4,
                 mode="waveunet_k5",
                 out_width=ch // 2,
-                in_width=ch // 2,
+                in_width=ch // 2 + 1,
                 norm_type='weight'
             )
         
@@ -219,23 +219,25 @@ class A2AHiFiPlusGeneratorBSSV2(A2AHiFiPlusGeneratorV2):
         x = self.hi1(x)
         x = self.hi2(x)
         x = self.hi3(x)'''
+
+        '''
         if self.training:
             dropout_rate = 0.9
             drop_mask = (torch.rand(x_orig.shape[0]) < dropout_rate).float()
             first_orig = x_orig * drop_mask[:, None, None].to(x_orig.device) / dropout_rate
         else:
-            first_orig = x_orig
+            first_orig = x_orig'''
 
         if self.use_waveunet and self.waveunet_before_spectralmasknet:
-            x = self.apply_waveunet_a2a(x, first_orig)
+            x = self.apply_waveunet_a2a(x, x_orig)
 
         masked_1 = self.mask1(x[:, :self.ch // 2, :])
         masked_2 = self.mask2(x[:, self.ch // 2:, :])
 
-        #masked_1 = self.waveunet1(torch.cat([masked_1, x_orig], dim=1))
-        #masked_2 = self.waveunet2(torch.cat([masked_2, x_orig], dim=1))
-        masked_1 = self.waveunet1(masked_1)
-        masked_2 = self.waveunet2(masked_2)
+        masked_1 = self.waveunet1(torch.cat([masked_1, x_orig], dim=1))
+        masked_2 = self.waveunet2(torch.cat([masked_2, x_orig], dim=1))
+        #masked_1 = self.waveunet1(masked_1)
+        #masked_2 = self.waveunet2(masked_2)
 
         #masked_1 = self.mrf1(masked_1)
         #masked_2 = self.mrf2(masked_2)

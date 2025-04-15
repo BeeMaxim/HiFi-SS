@@ -92,14 +92,14 @@ class BSSGeneratorLoss(nn.Module):
         st = time.time()
         
         with torch.no_grad():
-            real_estimations = discriminator(torch.cat([audios, batch["mix_audio"]], dim=1), ids)
+            real_estimations = discriminator(audios, batch["mix_audio"], ids)
 
         for p in permutations:
         
             bef = time.time()
             
             with torch.no_grad():
-                discriminator_estimations = discriminator(torch.cat([separated_audios[:, p, :], batch["mix_audio"]], dim=1), ids)
+                discriminator_estimations = discriminator(separated_audios[:, p, :], batch["mix_audio"], ids)
 
             cur_loss = [0] * B
             for b in range(B):
@@ -165,8 +165,8 @@ class BSSGeneratorLoss(nn.Module):
         reordered = separated_audios[torch.arange(separated_audios.shape[0])[:, None], order]
         mel_reordered = fake_melspec[torch.arange(fake_melspec.shape[0])[:, None], order]
 
-        fake_estimations = discriminator(torch.cat([reordered, batch["mix_audio"]], dim=1), ids)
-        real_estimations = discriminator(torch.cat([audios, batch["mix_audio"]], dim=1), ids)
+        fake_estimations = discriminator(reordered, batch["mix_audio"], ids)
+        real_estimations = discriminator(audios, batch["mix_audio"], ids)
 
         losses = {}
         losses["feature_loss"] = feature_loss(real_estimations["fmap"], fake_estimations["fmap"])
@@ -174,8 +174,8 @@ class BSSGeneratorLoss(nn.Module):
         losses["l1_loss"] = F.l1_loss(mel_reordered, real_melspec)
         losses["snr_loss"] = -self.si_snr_loss(reordered, audios)# + self.si_snr_loss(reordered[:, 0, :], reordered[:, 1, :]) / 4
         # print('total', losses['snr_loss'])
-        # losses["generator_loss"] = losses["feature_loss"] + losses["g_loss"] + losses["snr_loss"]
-        losses["generator_loss"] = losses["snr_loss"] * 1
+        losses["generator_loss"] = losses["feature_loss"] + losses["g_loss"] + losses["snr_loss"]
+        # losses["generator_loss"] = losses["snr_loss"] * 1
         # losses["generator_loss"] = losses["snr_loss"]
         # print("OTHER", time.time() - st)
         # losses["generator_loss"] = losses["l1_loss"] * 45

@@ -278,8 +278,8 @@ class BSSTrainer(BaseTrainer):
         reordered = separated_audios[torch.arange(separated_audios.shape[0])[:, None], order]
         batch["reordered"] = reordered
 
-        fake_estimations = self.discriminator(torch.cat([reordered.detach(), batch["mix_audio"]], dim=1), ids=batch["ids"])
-        real_estimations = self.discriminator(torch.cat([batch["audios"], batch["mix_audio"]], dim=1), ids=batch["ids"])
+        fake_estimations = self.discriminator(reordered.detach(), batch["mix_audio"], ids=batch["ids"])
+        real_estimations = self.discriminator(batch["audios"], batch["mix_audio"], ids=batch["ids"])
         #mix_estimations = self.discriminator(batch["mix_audio"], ids=None)
         discriminator_loss = self.discriminator_criterion(real_estimation=real_estimations["estimation"],
                                                           fake_estimation=fake_estimations["estimation"])
