@@ -5,6 +5,8 @@ from tqdm.auto import tqdm
 from src.metrics.tracker import MetricTracker
 from src.trainer.base_trainer import BaseTrainer
 
+from torchmetrics.audio import ScaleInvariantSignalNoiseRatio
+
 
 class Inferencer(BaseTrainer):
     """
@@ -123,19 +125,26 @@ class Inferencer(BaseTrainer):
         outputs = self.generator(**batch)
         batch.update(outputs)
 
-        if metrics is not None:
-            for met in self.metrics["inference"]:
-                metrics.update(met.name, met(**batch))
-
         # Some saving logic. This is an example
         # Use if you need to save predictions on disk
 
-        batch_size = batch["clean_audio"].shape[0]
+        batch_size = batch["audios"].shape[0]
         current_id = batch_idx * batch_size
+        snr = ScaleInvariantSignalNoiseRatio().to(batch["separated_audios"].device)
 
+        order_list = []
         for i in range(batch_size):
             # clone because of
             # https://github.com/pytorch/pytorch/issues/1995
+            separated = batch["separated_audios"][i]
+            audios = batch["audios"][i]
+
+            reordered = separated
+            if snr(separated[[1, 0], :], audios) > snr(separated, audios):
+                reordered = separated[[1, 0], :]
+
+            order_list.append(reordered)
+            '''
             clean_audio_predicted = batch["clean_audio_predicted"][i].clone()
             clean_audio = batch["clean_audio"][i].clone()
             file_name = batch["file_name"][i]
@@ -151,7 +160,12 @@ class Inferencer(BaseTrainer):
             if self.save_path is not None:
                 # you can use safetensors or other lib here
                 torchaudio.save(self.save_path / part /  f"{file_name}", clean_audio_predicted.cpu(), sample_rate=sr)
-                # torch.save(output, self.save_path / part / f"output_{output_id}.pth")
+                # torch.save(output, self.save_path / part / f"output_{output_id}.pth")'''
+            
+        batch["reordered"] = torch.stack(order_list)
+        if metrics is not None:
+            for met in self.metrics["inference"]:
+                metrics.update(met.name, met(**batch))
 
         return batch
 

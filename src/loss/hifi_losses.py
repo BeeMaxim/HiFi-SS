@@ -162,7 +162,15 @@ class BSSGeneratorLoss(nn.Module):
                     order[b, :] = torch.tensor(p, dtype=torch.int32)
         print("SECOND", time.time() - st)
         st = time.time()'''
+        # print(order)
         reordered = separated_audios[torch.arange(separated_audios.shape[0])[:, None], order]
+        # print(separated_audios[:, :, 1000:1005])
+        #print(reordered[:, :, 1000:1005])
+        #print(audios[:, :, 1000:1005])
+        #print(batch["mix_audio"][:, :, 1000:1005])
+        #print('---------------------------------')
+        #print(self.si_snr_loss(batch["mix_audio"], audios[:, :1, :]))
+        #print(self.si_snr_loss(batch["mix_audio"], audios[:, 1:, :]))
         mel_reordered = fake_melspec[torch.arange(fake_melspec.shape[0])[:, None], order]
 
         fake_estimations = discriminator(reordered, batch["mix_audio"], ids)
@@ -171,11 +179,12 @@ class BSSGeneratorLoss(nn.Module):
         losses = {}
         losses["feature_loss"] = feature_loss(real_estimations["fmap"], fake_estimations["fmap"])
         losses["g_loss"] = generator_loss(fake_estimations["estimation"])[0]
-        losses["l1_loss"] = F.l1_loss(mel_reordered, real_melspec)
+        #losses["l1_loss"] = F.l1_loss(mel_reordered, real_melspec)
+        losses["l1_loss"] = F.l1_loss(batch["y_melspec"], batch["mix_melspec"])
         losses["snr_loss"] = -self.si_snr_loss(reordered, audios)# + self.si_snr_loss(reordered[:, 0, :], reordered[:, 1, :]) / 4
         # print('total', losses['snr_loss'])
-        losses["generator_loss"] = losses["feature_loss"] + losses["g_loss"] + losses["snr_loss"]
-        # losses["generator_loss"] = losses["snr_loss"] * 1
+        #losses["generator_loss"] = losses["feature_loss"] + losses["g_loss"] + losses["snr_loss"]
+        losses["generator_loss"] = losses["snr_loss"] + losses["l1_loss"] * 10
         # losses["generator_loss"] = losses["snr_loss"]
         # print("OTHER", time.time() - st)
         # losses["generator_loss"] = losses["l1_loss"] * 45

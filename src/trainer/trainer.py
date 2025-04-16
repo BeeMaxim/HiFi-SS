@@ -260,7 +260,8 @@ class BSSTrainer(BaseTrainer):
         # Generator step
         outputs = self.generator(**batch)
         real_melspec = self.generator.get_melspec(batch["audios"])
-        batch.update({"real_melspec": real_melspec} | outputs)
+        mix_melspec = self.generator.get_melspec(batch["mix_audio"])
+        batch.update({"real_melspec": real_melspec, "mix_melspec": mix_melspec} | outputs)
         generator_loss, order = self.generator_criterion(**batch, discriminator=self.discriminator)
         batch.update(generator_loss)
 
@@ -320,6 +321,7 @@ class BSSTrainer(BaseTrainer):
             audios = {
                 "first_predicted": predicted[0, 0, :],
                 "second_predicted": predicted[0, 1, :],
+                "mix_predicted": batch["mix_predicted"][0, 0, :],
                 "first_gt": gt[0, 0, :],
                 "second_gt": gt[0, 1, :],
                 "mix_gt": (gt[0, 0, :] + gt[0, 1, :]) / 2,
