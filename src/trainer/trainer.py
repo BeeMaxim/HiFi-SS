@@ -260,7 +260,7 @@ class BSSTrainer(BaseTrainer):
         # Generator step
         outputs = self.generator(**batch)
         real_melspec = self.generator.get_melspec(batch["audios"])
-        mix_melspec = self.generator.get_melspec(batch["mix_audio"])
+        mix_melspec = self.generator.get_melspec(batch["audios"][:, :1, :])
         batch.update({"real_melspec": real_melspec, "mix_melspec": mix_melspec} | outputs)
         generator_loss, order = self.generator_criterion(**batch, discriminator=self.discriminator)
         batch.update(generator_loss)
@@ -320,23 +320,23 @@ class BSSTrainer(BaseTrainer):
             sr = batch["sr"]
             audios = {
                 "first_predicted": predicted[0, 0, :],
-                "second_predicted": predicted[0, 1, :],
-                "mix_predicted": batch["mix_predicted"][0, 0, :],
+                #"second_predicted": predicted[0, 1, :],
+                #"mix_predicted": batch["mix_predicted"][0, 0, :],
                 "first_gt": gt[0, 0, :],
-                "second_gt": gt[0, 1, :],
-                "mix_gt": (gt[0, 0, :] + gt[0, 1, :]) / 2,
-                "diff_predicted": predicted[0, 0, :] - predicted[0, 1, :]
+                #"second_gt": gt[0, 1, :],
+                #"mix_gt": (gt[0, 0, :] + gt[0, 1, :]) / 2,
+                #"diff_predicted": predicted[0, 0, :] - predicted[0, 1, :]
             }
 
             melspec_real = batch["real_melspec"]
             melspec_fake = batch["fake_melspec"]
 
             melspecs = {
-                "first_melspec_predicted": plot_spectrogram(melspec_fake[0, 0, ...].cpu().detach()),
-                "second_melspec_predicted": plot_spectrogram(melspec_fake[0, 1, ...].cpu().detach()),
-                "first_melspec_gt": plot_spectrogram(melspec_real[0, 0, ...].cpu()),
-                "second_melspec_gt": plot_spectrogram(melspec_real[0, 1, ...].cpu()),
-                "diff_melspec_predicted": plot_spectrogram(melspec_fake[0, 0, ...].cpu().detach() - melspec_fake[0, 1, ...].cpu().detach())
+                "first_melspec_predicted": plot_spectrogram(melspec_fake[0, ...].cpu().detach()),
+                #"second_melspec_predicted": plot_spectrogram(melspec_fake[0, 1, ...].cpu().detach()),
+                "first_melspec_gt": plot_spectrogram(melspec_real[0, ...].cpu()),
+                #"second_melspec_gt": plot_spectrogram(melspec_real[0, 1, ...].cpu()),
+                #"diff_melspec_predicted": plot_spectrogram(melspec_fake[0, 0, ...].cpu().detach() - melspec_fake[0, 1, ...].cpu().detach())
             }
 
             for audio_name, audio in audios.items():

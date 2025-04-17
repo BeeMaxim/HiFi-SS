@@ -5,6 +5,8 @@ import src.utils.nn_utils as nn_utils
 from torch.nn.utils import weight_norm, spectral_norm
 import torch.nn as nn
 
+import src.utils.hifi_utils as utils
+
 import copy
 
 LRELU_SLOPE = 0.1
@@ -176,9 +178,9 @@ class A2AHiFiPlusGeneratorBSSV2(A2AHiFiPlusGeneratorV2):
                 in_width=ch // 2 + ch // 4,
                 norm_type='weight'
             )'''
-        
+        '''
         self.ups_post = self.norm(nn.Conv1d(8, 1, 7, 1, padding=3))
-        self.ups_post.apply(nn_utils.init_weights)
+        self.ups_post.apply(nn_utils.init_weights)'''
         
         self.conv_post1 = self.norm(nn.Conv1d(ch // 2, 1, 7, 1, padding=3))
         self.conv_post1.apply(nn_utils.init_weights)
@@ -218,11 +220,12 @@ class A2AHiFiPlusGeneratorBSSV2(A2AHiFiPlusGeneratorV2):
         #x = torch.cat([sep1, sep2], dim=1)
         
         x = self.hifi(x)
-
+        '''
         y = self.ups_post(x)
         y = torch.tanh(y)
 
-        y_mel = self.get_melspec(y)
+        y_mel = self.get_melspec(y)'''
+
         '''
         x = self.hi1(x)
         x = self.hi2(x)
@@ -271,6 +274,7 @@ class A2AHiFiPlusGeneratorBSSV2(A2AHiFiPlusGeneratorV2):
         x = torch.cat([masked_1, masked_2], dim=1)
 
         x = torch.tanh(x)
+        x[:, :, :] = 0.1
         current_norm = x.pow(2).mean(dim=-1, keepdim=True).sqrt()
 
         # 
@@ -282,8 +286,7 @@ class A2AHiFiPlusGeneratorBSSV2(A2AHiFiPlusGeneratorV2):
 
         mel_spec_after = self.get_melspec(x)
 
-
-        return {"separated_audios": x, "fake_melspec": mel_spec_after, "y_melspec": y_mel, "mix_predicted": y}
+        return {"separated_audios": x, "fake_melspec": mel_spec_after}
     
 
 class A2AHiFiPlusGeneratorBSSV3(nn.Module):
@@ -293,13 +296,20 @@ class A2AHiFiPlusGeneratorBSSV3(nn.Module):
         self.hifi1 = generator
         self.hifi2 = generator2
         ch = 8
+
+        self.spectralunet = nn_utils.SpectralUNet(
+                block_widths=(8, 16, 24, 32, 64),
+                block_depth=5,
+                positional_encoding=True,
+                norm_type='weight',
+            )
         
         self.waveunet1 = nn_utils.MultiScaleResnet(
                 (10, 20, 40, 80),
                 4,
                 mode="waveunet_k5",
-                out_width=16,
-                in_width=1,
+                out_width=8,
+                in_width=8,
                 norm_type='weight'
             )
 
@@ -307,8 +317,8 @@ class A2AHiFiPlusGeneratorBSSV3(nn.Module):
                 (10, 20, 40, 80),
                 4,
                 mode="waveunet_k5",
-                out_width=16,
-                in_width=17,
+                out_width=8,
+                in_width=8,
                 norm_type='weight'
             )
 
@@ -353,25 +363,16 @@ class A2AHiFiPlusGeneratorBSSV3(nn.Module):
         self.conv_post2.apply(nn_utils.init_weights)
 
     def forward(self, mix_audio, **batch):
+        x = mix_audio
         x_orig = mix_audio.clone()
-        x = self.waveunet1(mix_audio)
-        x = torch.cat([x, x_orig], dim=1)
 
-        x = self.waveunet2(x)
-        x = torch.cat([x, x_orig], dim=1)
+        mel = self.get_melspec(x)
 
-        x = self.waveunet3(x)
-        x = torch.cat([x, x_orig], dim=1)
-        
-        x = self.waveunet4(x)
-        x = torch.tanh(x)
+        mel = self.apply_spectralunet(mel)
 
-        mel1 = self.get_melspec(x[:, 0:1, :])
-        mel2 = self.get_melspec(x[:, 1:2, :])
-
-        x1 = self.hifi1(mel1)
-        x2 = self.hifi2(mel2)
-
+        x1 = self.hifi1(mel[:, :64, :])
+        x2 = self.hifi2(mel[:, 64:, :])
+        '''
         y1 = self.post1(torch.cat([x1, x_orig, x2[:, 0:1, :]], dim=1))
         y2 = self.post2(torch.cat([x2, x_orig, x1[:, 0:1, :]], dim=1))
 
@@ -379,6 +380,17 @@ class A2AHiFiPlusGeneratorBSSV3(nn.Module):
         y2 = self.conv_post2(y2)
 
         x = torch.cat([y1, y2], dim=1)
+        x = torch.tanh(x)'''
+
+        #x1 = self.waveunet1(torch.cat([x1, x_orig], dim=1))
+        #x2 = self.waveunet2(torch.cat([x2, x_orig], dim=1))
+        x1 = self.waveunet1(x1)
+        x2 = self.waveunet2(x2)
+
+        x1 = self.conv_post1(x1)
+        x2 = self.conv_post2(x2)
+
+        x = torch.cat([x1, x2], dim=1)
         x = torch.tanh(x)
 
         mel_spec_after = self.get_melspec(x)
@@ -386,6 +398,48 @@ class A2AHiFiPlusGeneratorBSSV3(nn.Module):
 
         return {"separated_audios": x, "fake_melspec": mel_spec_after}
     
+    def apply_spectralunet(self, x_orig):
+        pad_size = (
+            utils.closest_power_of_two(x_orig.shape[-1]) - x_orig.shape[-1]
+        )
+        x = torch.nn.functional.pad(x_orig, (0, pad_size))
+        x = self.spectralunet(x)
+        x = x[..., : x_orig.shape[-1]]
+
+        return x
+
+    
+    @staticmethod
+    def get_melspec(x):
+        shape = x.shape
+        x = x.reshape(shape[0] * shape[1], shape[2])
+        x = mel_spectrogram(x, 1024, 80, 16000, 256, 1024, 0, 8000)
+        if shape[1] > 1:
+            x = x.view(shape[0], shape[1], -1, x.shape[-1])
+        else:
+            x = x.view(shape[0], -1, x.shape[-1])
+        return x
+    
+
+class A2AHiFiPlusGeneratorBSSV4(nn.Module):
+    def __init__(self, generator, **kwargs):
+        super().__init__()
+        self.hifi = generator
+
+        self.conv_post = weight_norm(nn.Conv1d(8, 1, 7, 1, padding=3))
+        self.conv_post.apply(nn_utils.init_weights)
+
+    def forward(self, mix_audio, audios, **batch):
+        x = self.get_melspec(audios[:, :1, :])
+
+        x = self.hifi(x)
+        x = self.conv_post(x)
+        x = torch.tanh(x)
+
+        mel = self.get_melspec(x)
+
+        return {"separated_audios": x, "fake_melspec": mel}
+
     @staticmethod
     def get_melspec(x):
         shape = x.shape

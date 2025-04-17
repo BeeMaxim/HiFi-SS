@@ -177,10 +177,12 @@ class BSSDiscriminator(nn.Module):
                                             channel_count=channel_count)
 
     def forward(self, audios, mix_audio, ids=None, **batch):
+        audios = audios[:, :1, :]
         B, C, _ = audios.shape
+        '''
         first = torch.cat([audios[:, :1, :], mix_audio], dim=1)
         second = torch.cat([audios[:, 1:, :], mix_audio], dim=1)
-        audios = torch.cat([first, second], dim=0)
+        audios = torch.cat([first, second], dim=0)'''
         '''
         if self.channels != C:
             audios = audios.reshape(B * C, 1, -1)'''

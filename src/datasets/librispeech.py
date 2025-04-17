@@ -208,7 +208,7 @@ class LibrispeechMixDataset(BaseDataset):
             index_list.append(speaker_index)
 
         instance_data = {"mix_audio": mix_audio,
-                         "audios": torch.cat(audio_list),
+                         "audios": torch.cat(audio_list)[:1, :],
                          "ids": torch.tensor(index_list, dtype=torch.int32),
                          "audio_len": audio_len,
                          "sr": self.target_sr}
