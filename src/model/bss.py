@@ -274,7 +274,7 @@ class A2AHiFiPlusGeneratorBSSV2(A2AHiFiPlusGeneratorV2):
         x = torch.cat([masked_1, masked_2], dim=1)
 
         x = torch.tanh(x)
-        x[:, :, :] = 0.1
+        #x[:, :, :] = 0.1
         current_norm = x.pow(2).mean(dim=-1, keepdim=True).sqrt()
 
         # 
@@ -309,7 +309,7 @@ class A2AHiFiPlusGeneratorBSSV3(nn.Module):
                 4,
                 mode="waveunet_k5",
                 out_width=8,
-                in_width=8,
+                in_width=9,
                 norm_type='weight'
             )
 
@@ -318,7 +318,7 @@ class A2AHiFiPlusGeneratorBSSV3(nn.Module):
                 4,
                 mode="waveunet_k5",
                 out_width=8,
-                in_width=8,
+                in_width=9,
                 norm_type='weight'
             )
 
@@ -382,10 +382,10 @@ class A2AHiFiPlusGeneratorBSSV3(nn.Module):
         x = torch.cat([y1, y2], dim=1)
         x = torch.tanh(x)'''
 
-        #x1 = self.waveunet1(torch.cat([x1, x_orig], dim=1))
-        #x2 = self.waveunet2(torch.cat([x2, x_orig], dim=1))
-        x1 = self.waveunet1(x1)
-        x2 = self.waveunet2(x2)
+        x1 = self.waveunet1(torch.cat([x1, x_orig], dim=1))
+        x2 = self.waveunet2(torch.cat([x2, x_orig], dim=1))
+        #x1 = self.waveunet1(x1)
+        #x2 = self.waveunet2(x2)
 
         x1 = self.conv_post1(x1)
         x2 = self.conv_post2(x2)

@@ -320,23 +320,22 @@ class BSSTrainer(BaseTrainer):
             sr = batch["sr"]
             audios = {
                 "first_predicted": predicted[0, 0, :],
-                #"second_predicted": predicted[0, 1, :],
-                #"mix_predicted": batch["mix_predicted"][0, 0, :],
+                "second_predicted": predicted[0, 1, :],
                 "first_gt": gt[0, 0, :],
-                #"second_gt": gt[0, 1, :],
-                #"mix_gt": (gt[0, 0, :] + gt[0, 1, :]) / 2,
-                #"diff_predicted": predicted[0, 0, :] - predicted[0, 1, :]
+                "second_gt": gt[0, 1, :],
+                "mix_gt": (gt[0, 0, :] + gt[0, 1, :]) / 2,
+                "diff_predicted": predicted[0, 0, :] - predicted[0, 1, :]
             }
 
             melspec_real = batch["real_melspec"]
             melspec_fake = batch["fake_melspec"]
 
             melspecs = {
-                "first_melspec_predicted": plot_spectrogram(melspec_fake[0, ...].cpu().detach()),
-                #"second_melspec_predicted": plot_spectrogram(melspec_fake[0, 1, ...].cpu().detach()),
-                "first_melspec_gt": plot_spectrogram(melspec_real[0, ...].cpu()),
-                #"second_melspec_gt": plot_spectrogram(melspec_real[0, 1, ...].cpu()),
-                #"diff_melspec_predicted": plot_spectrogram(melspec_fake[0, 0, ...].cpu().detach() - melspec_fake[0, 1, ...].cpu().detach())
+                "first_melspec_predicted": plot_spectrogram(melspec_fake[0, 0, ...].cpu().detach()),
+                "second_melspec_predicted": plot_spectrogram(melspec_fake[0, 1, ...].cpu().detach()),
+                "first_melspec_gt": plot_spectrogram(melspec_real[0, 0, ...].cpu()),
+                "second_melspec_gt": plot_spectrogram(melspec_real[0, 1, ...].cpu()),
+                "diff_melspec_predicted": plot_spectrogram(melspec_fake[0, 0, ...].cpu().detach() - melspec_fake[0, 1, ...].cpu().detach())
             }
 
             for audio_name, audio in audios.items():
