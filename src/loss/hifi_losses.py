@@ -120,7 +120,7 @@ class BSSGeneratorLoss(nn.Module):
                 #print('DIFF', self.si_snr_loss(audios[b, 0, :], audios[b, 1, :]))
                 # cur_loss[b] += F.l1_loss(fake_melspec[b, p], real_melspec[b]) * 45
                 # print("si-snr", p, time.time() - sp)
-                '''
+                
                 lss = time.time()
                 
                 ch = [x[b:b+1] for x in discriminator_estimations["estimation"]]
@@ -133,7 +133,7 @@ class BSSGeneratorLoss(nn.Module):
                 for d in real_estimations["fmap"]:
                     for fmap in d:
                         fmap_r.append(fmap[b:b+1, ...])
-                cur_loss[b] += feature_loss(fmap_f, fmap_r)'''
+                cur_loss[b] += feature_loss(fmap_f, fmap_r)
 
                 if losses[b] is None or cur_loss[b] < losses[b]:
                     losses[b] = cur_loss[b]
@@ -185,8 +185,8 @@ class BSSGeneratorLoss(nn.Module):
         # losses["l1_loss"] = F.l1_loss(batch["fake_melspec"], batch["mix_melspec"])
         losses["snr_loss"] = -self.si_snr_loss(reordered, audios)# + self.si_snr_loss(reordered[:, 0, :], reordered[:, 1, :]) / 4
         # print('total', losses['snr_loss'])
-        #losses["generator_loss"] = losses["feature_loss"] + losses["g_loss"] + losses["l1_loss"] * 45 + losses["snr_loss"]
-        losses["generator_loss"] = losses["l1_loss"] * 45 + losses["snr_loss"]
+        losses["generator_loss"] = losses["feature_loss"] + losses["g_loss"] + losses["l1_loss"] * 45 + losses["snr_loss"]
+        # losses["generator_loss"] = losses["l1_loss"] * 45 + losses["snr_loss"]
         # losses["generator_loss"] = losses["snr_loss"]
         # print("OTHER", time.time() - st)
         # losses["generator_loss"] = losses["l1_loss"] * 45

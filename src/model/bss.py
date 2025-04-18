@@ -105,13 +105,13 @@ class A2AHiFiPlusGeneratorBSSV2(A2AHiFiPlusGeneratorV2):
 
 
         self.mask1 = nn_utils.SpectralMaskNet(
-                in_ch=ch // 2,
+                in_ch=4,
                 block_widths=(8, 12, 24, 32),
                 block_depth=4,
                 norm_type='weight'
             )
         self.mask2 = nn_utils.SpectralMaskNet(
-                in_ch=ch // 2,
+                in_ch=4,
                 block_widths=(8, 12, 24, 32),
                 block_depth=4,
                 norm_type='weight'
@@ -121,16 +121,16 @@ class A2AHiFiPlusGeneratorBSSV2(A2AHiFiPlusGeneratorV2):
                 (10, 20, 40, 80),
                 4,
                 mode="waveunet_k5",
-                out_width=ch // 2,
-                in_width=ch // 2 + 1,
+                out_width=4,
+                in_width=5,
                 norm_type='weight'
             )
         self.waveunet2 = nn_utils.MultiScaleResnet(
                 (10, 20, 40, 80),
                 4,
                 mode="waveunet_k5",
-                out_width=ch // 2,
-                in_width=ch // 2 + 1,
+                out_width=4,
+                in_width=5,
                 norm_type='weight'
             )
         
@@ -180,8 +180,12 @@ class A2AHiFiPlusGeneratorBSSV2(A2AHiFiPlusGeneratorV2):
         #x = torch.cat([sep1, sep2], dim=1)
         
         x = self.hifi(x)
+        '''
+        masked_1 = self.conv_post1(x[:, :self.ch // 2, :])
+        masked_2 = self.conv_post2(x[:, self.ch // 2:, :])
 
-        y = x.detach()
+        y = torch.cat([masked_1, masked_2], dim=1)
+        y = torch.tanh(y)'''
 
         '''
         y = self.ups_post(x)
@@ -205,13 +209,18 @@ class A2AHiFiPlusGeneratorBSSV2(A2AHiFiPlusGeneratorV2):
         
         if self.use_waveunet and self.waveunet_before_spectralmasknet:
             x = self.apply_waveunet_a2a(x, x_orig)
+        y = x.detach()
         if self.use_waveunet and self.waveunet_before_spectralmasknet:
             y = self.apply_waveunet_a2a(y, x_orig)
 
+        
         masked_1 = self.mask1(x[:, :self.ch // 2, :])
         masked_2 = self.mask2(x[:, self.ch // 2:, :])
         y_1 = self.mask1(y[:, :self.ch // 2, :])
         y_2 = self.mask2(y[:, self.ch // 2:, :])
+
+        #masked_1 = self.mask1(masked_1.detach())
+        #masked_2 = self.mask1(masked_2.detach())
 
         #masked_1 = x[:, :self.ch // 2, :]
         #masked_2 = x[:, self.ch // 2:, :]
@@ -249,6 +258,7 @@ class A2AHiFiPlusGeneratorBSSV2(A2AHiFiPlusGeneratorV2):
 
         y = torch.cat([y_1, y_2], dim=1)
         y = torch.tanh(y)
+
         #x[:, :, :] = 0.1
         current_norm = x.pow(2).mean(dim=-1, keepdim=True).sqrt()
 
