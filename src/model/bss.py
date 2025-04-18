@@ -102,31 +102,6 @@ class A2AHiFiPlusGeneratorBSSV2(A2AHiFiPlusGeneratorV2):
 
         ch = 8
         self.ch = ch
-        '''
-        self.hi1 = nn_utils.MultiScaleResnet(
-                (10, 20, 40, 80),
-                4,
-                mode="waveunet_k5",
-                out_width=64,
-                in_width=1,
-                norm_type='weight'
-            )
-        self.hi2 = nn_utils.MultiScaleResnet(
-                (10, 20, 40, 80),
-                4,
-                mode="waveunet_k5",
-                out_width=64,
-                in_width=64,
-                norm_type='weight'
-            )
-        self.hi3 = nn_utils.MultiScaleResnet(
-                (10, 20, 40, 80),
-                4,
-                mode="waveunet_k5",
-                out_width=8,
-                in_width=64,
-                norm_type='weight'
-            )'''
 
 
         self.mask1 = nn_utils.SpectralMaskNet(
@@ -161,26 +136,11 @@ class A2AHiFiPlusGeneratorBSSV2(A2AHiFiPlusGeneratorV2):
         
         #self.mrf1 = MRF(4, [3, 7, 11], [[[1, 1], [3, 1], [5, 1]], [[1, 1], [3, 1], [5, 1]], [[1, 1], [3, 1], [5, 1]]])
         #self.mrf2 = MRF(4, [3, 7, 11], [[[1, 1], [3, 1], [5, 1]], [[1, 1], [3, 1], [5, 1]], [[1, 1], [3, 1], [5, 1]]])
-        '''
-        self.waveunet11 = nn_utils.MultiScaleResnet(
-                (10, 20, 40, 80),
-                4,
-                mode="waveunet_k5",
-                out_width=ch // 2,
-                in_width=ch // 2 + ch // 4,
-                norm_type='weight'
-            )
-        self.waveunet12 = nn_utils.MultiScaleResnet(
-                (10, 20, 40, 80),
-                4,
-                mode="waveunet_k5",
-                out_width=ch // 2,
-                in_width=ch // 2 + ch // 4,
-                norm_type='weight'
-            )'''
-        '''
-        self.ups_post = self.norm(nn.Conv1d(8, 1, 7, 1, padding=3))
-        self.ups_post.apply(nn_utils.init_weights)'''
+
+        self.ups_post1 = self.norm(nn.Conv1d(ch // 2, 1, 7, 1, padding=3))
+        self.ups_post1.apply(nn_utils.init_weights)
+        self.ups_post2 = self.norm(nn.Conv1d(ch // 2, 1, 7, 1, padding=3))
+        self.ups_post2.apply(nn_utils.init_weights)
         
         self.conv_post1 = self.norm(nn.Conv1d(ch // 2, 1, 7, 1, padding=3))
         self.conv_post1.apply(nn_utils.init_weights)
@@ -220,6 +180,9 @@ class A2AHiFiPlusGeneratorBSSV2(A2AHiFiPlusGeneratorV2):
         #x = torch.cat([sep1, sep2], dim=1)
         
         x = self.hifi(x)
+
+        y = x.detach()
+
         '''
         y = self.ups_post(x)
         y = torch.tanh(y)
@@ -239,17 +202,24 @@ class A2AHiFiPlusGeneratorBSSV2(A2AHiFiPlusGeneratorV2):
         else:
             first_orig = x_orig'''
         
+        
         if self.use_waveunet and self.waveunet_before_spectralmasknet:
             x = self.apply_waveunet_a2a(x, x_orig)
+        if self.use_waveunet and self.waveunet_before_spectralmasknet:
+            y = self.apply_waveunet_a2a(y, x_orig)
 
         masked_1 = self.mask1(x[:, :self.ch // 2, :])
         masked_2 = self.mask2(x[:, self.ch // 2:, :])
+        y_1 = self.mask1(y[:, :self.ch // 2, :])
+        y_2 = self.mask2(y[:, self.ch // 2:, :])
 
         #masked_1 = x[:, :self.ch // 2, :]
         #masked_2 = x[:, self.ch // 2:, :]
 
         masked_1 = self.waveunet1(torch.cat([masked_1, x_orig], dim=1))
         masked_2 = self.waveunet2(torch.cat([masked_2, x_orig], dim=1))
+        y_1 = self.waveunet1(torch.cat([y_1, x_orig], dim=1))
+        y_2 = self.waveunet2(torch.cat([y_2, x_orig], dim=1))
         #masked_1 = self.waveunet1(masked_1)
         #masked_2 = self.waveunet2(masked_2)
 
@@ -270,10 +240,15 @@ class A2AHiFiPlusGeneratorBSSV2(A2AHiFiPlusGeneratorV2):
         masked_1 = self.conv_post1(masked_1)
         masked_2 = self.conv_post2(masked_2)
 
+        y_1 = self.conv_post1(y_1)
+        y_2 = self.conv_post2(y_2)
+
 
         x = torch.cat([masked_1, masked_2], dim=1)
-
         x = torch.tanh(x)
+
+        y = torch.cat([y_1, y_2], dim=1)
+        y = torch.tanh(y)
         #x[:, :, :] = 0.1
         current_norm = x.pow(2).mean(dim=-1, keepdim=True).sqrt()
 
@@ -286,7 +261,7 @@ class A2AHiFiPlusGeneratorBSSV2(A2AHiFiPlusGeneratorV2):
 
         mel_spec_after = self.get_melspec(x)
 
-        return {"separated_audios": x, "fake_melspec": mel_spec_after}
+        return {"separated_audios": y, "upsampler_audios": x, "fake_melspec": mel_spec_after}
     
 
 class A2AHiFiPlusGeneratorBSSV3(nn.Module):

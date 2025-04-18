@@ -89,7 +89,7 @@ class BSSGeneratorLoss(nn.Module):
         permutations = list(itertools.permutations(range(N)))
         order = torch.zeros((B, N), dtype=torch.int32)
         losses = [None] * B
-        st = time.time()
+        upsampler_audios = batch["upsampler_audios"]
         
         with torch.no_grad():
             real_estimations = discriminator(audios, batch["mix_audio"], ids)
@@ -99,12 +99,12 @@ class BSSGeneratorLoss(nn.Module):
             bef = time.time()
             
             with torch.no_grad():
-                discriminator_estimations = discriminator(separated_audios[:, p, :], batch["mix_audio"], ids)
+                discriminator_estimations = discriminator(upsampler_audios[:, p, :], batch["mix_audio"], ids)
 
             cur_loss = [0] * B
             for b in range(B):
                 sp = time.time()
-                # cur_loss[b] += -self.si_snr_loss(separated_audios[b, p, :], audios[b]) * 1
+                cur_loss[b] += -self.si_snr_loss(separated_audios[b, p, :], audios[b]) * 1
                 cur_loss[b] += F.l1_loss(fake_melspec[b, p], real_melspec[b]) * 45
                 # print(p)
                 
@@ -120,7 +120,7 @@ class BSSGeneratorLoss(nn.Module):
                 #print('DIFF', self.si_snr_loss(audios[b, 0, :], audios[b, 1, :]))
                 # cur_loss[b] += F.l1_loss(fake_melspec[b, p], real_melspec[b]) * 45
                 # print("si-snr", p, time.time() - sp)
-                
+                '''
                 lss = time.time()
                 
                 ch = [x[b:b+1] for x in discriminator_estimations["estimation"]]
@@ -133,7 +133,7 @@ class BSSGeneratorLoss(nn.Module):
                 for d in real_estimations["fmap"]:
                     for fmap in d:
                         fmap_r.append(fmap[b:b+1, ...])
-                cur_loss[b] += feature_loss(fmap_f, fmap_r)
+                cur_loss[b] += feature_loss(fmap_f, fmap_r)'''
 
                 if losses[b] is None or cur_loss[b] < losses[b]:
                     losses[b] = cur_loss[b]
@@ -165,6 +165,7 @@ class BSSGeneratorLoss(nn.Module):
         st = time.time()'''
         # print(order)
         reordered = separated_audios[torch.arange(separated_audios.shape[0])[:, None], order]
+        upsampler_reordered = upsampler_audios[torch.arange(upsampler_audios.shape[0])[:, None], order]
         # print(separated_audios[:, :, 1000:1005])
         #print(reordered[:, :, 1000:1005])
         #print(audios[:, :, 1000:1005])
@@ -174,18 +175,18 @@ class BSSGeneratorLoss(nn.Module):
         #print(self.si_snr_loss(batch["mix_audio"], audios[:, 1:, :]))
         mel_reordered = fake_melspec[torch.arange(fake_melspec.shape[0])[:, None], order]
 
-        fake_estimations = discriminator(reordered, batch["mix_audio"], ids)
+        fake_estimations = discriminator(upsampler_reordered, batch["mix_audio"], ids)
         real_estimations = discriminator(audios, batch["mix_audio"], ids)
 
         losses = {}
         losses["feature_loss"] = feature_loss(real_estimations["fmap"], fake_estimations["fmap"])
         losses["g_loss"] = generator_loss(fake_estimations["estimation"])[0]
-        losses["l1_loss"] = F.l1_loss(fake_melspec, real_melspec)
+        losses["l1_loss"] = F.l1_loss(mel_reordered, real_melspec)
         # losses["l1_loss"] = F.l1_loss(batch["fake_melspec"], batch["mix_melspec"])
         losses["snr_loss"] = -self.si_snr_loss(reordered, audios)# + self.si_snr_loss(reordered[:, 0, :], reordered[:, 1, :]) / 4
         # print('total', losses['snr_loss'])
-        losses["generator_loss"] = losses["feature_loss"] + losses["g_loss"] + losses["l1_loss"] * 45
-        # losses["generator_loss"] = losses["l1_loss"] * 45
+        #losses["generator_loss"] = losses["feature_loss"] + losses["g_loss"] + losses["l1_loss"] * 45 + losses["snr_loss"]
+        losses["generator_loss"] = losses["l1_loss"] * 45 + losses["snr_loss"]
         # losses["generator_loss"] = losses["snr_loss"]
         # print("OTHER", time.time() - st)
         # losses["generator_loss"] = losses["l1_loss"] * 45

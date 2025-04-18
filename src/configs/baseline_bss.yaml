@@ -35,7 +35,7 @@ trainer:
   save_dir: "saved"
   seed: 1
   inference: True
-  max_grad_norm: 5
+  max_grad_norm: 100
 inferencer: # to calculate full metrics on train
   device_tensors: ["mix_audio", "ids", "audios"] # which tensors should be on device (ex. GPU)
   device: auto # device name or "auto"
