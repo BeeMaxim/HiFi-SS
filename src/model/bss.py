@@ -206,12 +206,13 @@ class A2AHiFiPlusGeneratorBSSV2(A2AHiFiPlusGeneratorV2):
         else:
             first_orig = x_orig'''
         
-        
+        y = x.detach()
+        '''
         if self.use_waveunet and self.waveunet_before_spectralmasknet:
             x = self.apply_waveunet_a2a(x, x_orig)
         y = x.detach()
         if self.use_waveunet and self.waveunet_before_spectralmasknet:
-            y = self.apply_waveunet_a2a(y, x_orig)
+            y = self.apply_waveunet_a2a(y, x_orig)'''
 
         
         masked_1 = self.mask1(x[:, :self.ch // 2, :])
@@ -411,15 +412,18 @@ class A2AHiFiPlusGeneratorBSSV4(nn.Module):
         super().__init__()
         self.hifi = generator
 
-        self.conv_post = weight_norm(nn.Conv1d(8, 1, 7, 1, padding=3))
+        self.conv_post = weight_norm(nn.Conv1d(8, 2, 7, 1, padding=3))
         self.conv_post.apply(nn_utils.init_weights)
 
-    def forward(self, mix_audio, audios, **batch):
-        x = self.get_melspec(audios[:, :1, :])
+    def forward(self, mix_audio, **batch):
+        x = self.get_melspec(mix_audio)
 
         x = self.hifi(x)
         x = self.conv_post(x)
-        x = torch.tanh(x)
+
+        mask = nn.functional.softmax(x, dim=1)
+
+        x = mix_audio * mask
 
         mel = self.get_melspec(x)
 

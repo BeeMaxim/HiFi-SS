@@ -1,5 +1,5 @@
 defaults:
-  - model: bss_v2
+  - model: bss_v4
   - _self_
 trainer:
   device: auto

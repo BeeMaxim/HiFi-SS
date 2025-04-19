@@ -277,13 +277,13 @@ class BSSTrainer(BaseTrainer):
 
         separated_audios = batch["separated_audios"]
         reordered = separated_audios[torch.arange(separated_audios.shape[0])[:, None], order]
-        upsampler_audios = batch["upsampler_audios"]
-        upsampler_reordered = upsampler_audios[torch.arange(upsampler_audios.shape[0])[:, None], order]
+        #upsampler_audios = batch["upsampler_audios"]
+        #upsampler_reordered = upsampler_audios[torch.arange(upsampler_audios.shape[0])[:, None], order]
         batch["reordered"] = reordered
-        batch["upsampler_reordered"] = upsampler_reordered
+        #batch["upsampler_reordered"] = upsampler_reordered
 
 
-        fake_estimations = self.discriminator(upsampler_reordered.detach(), batch["mix_audio"], ids=batch["ids"])
+        fake_estimations = self.discriminator(reordered.detach(), batch["mix_audio"], ids=batch["ids"])
         real_estimations = self.discriminator(batch["audios"], batch["mix_audio"], ids=batch["ids"])
         #mix_estimations = self.discriminator(batch["mix_audio"], ids=None)
         discriminator_loss = self.discriminator_criterion(real_estimation=real_estimations["estimation"],
@@ -320,14 +320,11 @@ class BSSTrainer(BaseTrainer):
         """
         if mode == "test" or True:
             predicted = batch["reordered"]
-            upsampler_predicted = batch["upsampler_reordered"]
             gt = batch["audios"]
             sr = batch["sr"]
             audios = {
                 "first_predicted": predicted[0, 0, :],
                 "second_predicted": predicted[0, 1, :],
-                "first_upsampler": upsampler_predicted[0, 0, :],
-                "second_upsampler": upsampler_predicted[0, 1, :],
                 "first_gt": gt[0, 0, :],
                 "second_gt": gt[0, 1, :],
                 "mix_gt": (gt[0, 0, :] + gt[0, 1, :]) / 2,

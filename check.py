@@ -31,7 +31,7 @@ def main(config):
         device = "cuda" if torch.cuda.is_available() else "cpu"
     else:
         device = config.trainer.device
-    pretrained_path = str('D:\HiFi-SS\checkpoint-epoch15.pth')
+    pretrained_path = str('D:\HiFi-SS\checkpoint-epoch18.pth')
     epoch = pretrained_path.split('.')[0].split('-')[2][5:]
     print(epoch)
 
