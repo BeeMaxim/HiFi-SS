@@ -104,8 +104,8 @@ class BSSGeneratorLoss(nn.Module):
             cur_loss = [0] * B
             for b in range(B):
                 sp = time.time()
-                cur_loss[b] += -self.si_snr_loss(separated_audios[b, p, :], audios[b]) * 1
-                # cur_loss[b] += F.l1_loss(fake_melspec[b, p], real_melspec[b]) * 45
+                # cur_loss[b] += -self.si_snr_loss(separated_audios[b, p, :], audios[b]) * 1
+                cur_loss[b] += F.l1_loss(fake_melspec[b, p], real_melspec[b]) * 45
                 # print(p)
                 
                 # print('SI-SNR LOSS:', cur_loss[b] / 45)
@@ -187,7 +187,7 @@ class BSSGeneratorLoss(nn.Module):
         # print('total', losses['snr_loss'])
         # losses["generator_loss"] = losses["feature_loss"] + losses["g_loss"] + losses["l1_loss"] * 45 + 0 * losses["snr_loss"]
         # losses["generator_loss"] = losses["l1_loss"] * 45 + losses["snr_loss"]
-        losses["generator_loss"] = losses["snr_loss"]
+        losses["generator_loss"] = losses["l1_loss"]
         # print("OTHER", time.time() - st)
         # losses["generator_loss"] = losses["l1_loss"] * 45
 

@@ -206,10 +206,9 @@ class A2AHiFiPlusGeneratorBSSV2(A2AHiFiPlusGeneratorV2):
         else:
             first_orig = x_orig'''
         
-        y = x.detach()
-        '''
         if self.use_waveunet and self.waveunet_before_spectralmasknet:
             x = self.apply_waveunet_a2a(x, x_orig)
+        '''
         y = x.detach()
         if self.use_waveunet and self.waveunet_before_spectralmasknet:
             y = self.apply_waveunet_a2a(y, x_orig)'''
@@ -217,8 +216,6 @@ class A2AHiFiPlusGeneratorBSSV2(A2AHiFiPlusGeneratorV2):
         
         masked_1 = self.mask1(x[:, :self.ch // 2, :])
         masked_2 = self.mask2(x[:, self.ch // 2:, :])
-        y_1 = self.mask1(y[:, :self.ch // 2, :])
-        y_2 = self.mask2(y[:, self.ch // 2:, :])
 
         #masked_1 = self.mask1(masked_1.detach())
         #masked_2 = self.mask1(masked_2.detach())
@@ -228,8 +225,7 @@ class A2AHiFiPlusGeneratorBSSV2(A2AHiFiPlusGeneratorV2):
 
         masked_1 = self.waveunet1(torch.cat([masked_1, x_orig], dim=1))
         masked_2 = self.waveunet2(torch.cat([masked_2, x_orig], dim=1))
-        y_1 = self.waveunet1(torch.cat([y_1, x_orig], dim=1))
-        y_2 = self.waveunet2(torch.cat([y_2, x_orig], dim=1))
+
         #masked_1 = self.waveunet1(masked_1)
         #masked_2 = self.waveunet2(masked_2)
 
@@ -250,15 +246,12 @@ class A2AHiFiPlusGeneratorBSSV2(A2AHiFiPlusGeneratorV2):
         masked_1 = self.conv_post1(masked_1)
         masked_2 = self.conv_post2(masked_2)
 
-        y_1 = self.conv_post1(y_1)
-        y_2 = self.conv_post2(y_2)
-
 
         x = torch.cat([masked_1, masked_2], dim=1)
+        # x = torch.tanh(x)
+        # x = nn.functional.softmax(x, dim=1)
+        #x = x_orig * x
         x = torch.tanh(x)
-
-        y = torch.cat([y_1, y_2], dim=1)
-        y = torch.tanh(y)
 
         #x[:, :, :] = 0.1
         current_norm = x.pow(2).mean(dim=-1, keepdim=True).sqrt()
@@ -272,7 +265,7 @@ class A2AHiFiPlusGeneratorBSSV2(A2AHiFiPlusGeneratorV2):
 
         mel_spec_after = self.get_melspec(x)
 
-        return {"separated_audios": y, "upsampler_audios": x, "fake_melspec": mel_spec_after}
+        return {"separated_audios": x, "fake_melspec": mel_spec_after}
     
 
 class A2AHiFiPlusGeneratorBSSV3(nn.Module):
@@ -412,16 +405,21 @@ class A2AHiFiPlusGeneratorBSSV4(nn.Module):
         super().__init__()
         self.hifi = generator
 
-        self.conv_post = weight_norm(nn.Conv1d(8, 2, 7, 1, padding=3))
-        self.conv_post.apply(nn_utils.init_weights)
+        self.conv_post1 = weight_norm(nn.Conv1d(4, 1, 7, 1, padding=3))
+        self.conv_post1.apply(nn_utils.init_weights)
+        self.conv_post2 = weight_norm(nn.Conv1d(4, 1, 7, 1, padding=3))
+        self.conv_post2.apply(nn_utils.init_weights)
 
     def forward(self, mix_audio, **batch):
         x = self.get_melspec(mix_audio)
 
         x = self.hifi(x)
-        x = self.conv_post(x)
+        x1 = self.conv_post1(x[:, :4, :])
+        x2 = self.conv_post2(x[:, 4:, :])
 
-        mask = nn.functional.softmax(x, dim=1)
+        mask = torch.cat([x1, x2], dim=1)
+
+        mask = nn.functional.softmax(mask, dim=1)
 
         x = mix_audio * mask
 
