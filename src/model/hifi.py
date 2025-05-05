@@ -236,7 +236,7 @@ class A2AHiFiPlusGeneratorV2(HiFiPlusGenerator):
         use_skip_connect=True,
         waveunet_before_spectralmasknet=True,
 
-        waveunet_input: Literal["waveform", "hifi", "both"] = "both",
+        waveunet_input: Literal["waveform", "hifi", "both"] = "hifi",
         out_channels=1
     ):
         super().__init__(

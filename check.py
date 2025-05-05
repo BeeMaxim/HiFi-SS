@@ -31,7 +31,7 @@ def main(config):
         device = "cuda" if torch.cuda.is_available() else "cpu"
     else:
         device = config.trainer.device
-    pretrained_path = str('D:\HiFi-SS\checkpoint-epoch18.pth')
+    pretrained_path = str('D:\HiFi-SS\checkpoint-epoch15.pth')
     epoch = pretrained_path.split('.')[0].split('-')[2][5:]
     print(epoch)
 
@@ -50,7 +50,12 @@ def main(config):
     else:
         generator.load_state_dict(checkpoint)
 
-    for i, d in enumerate(dataloaders["test"]):
+    weights = generator.waveunet_conv_pre.weight
+    channel_importance = torch.norm(weights, p=2, dim=(0, 2))
+    print(weights.shape)
+    print(channel_importance)
+    
+    for i, d in enumerate(dataloaders["train"]):
         item_path = save_path / f"{i}"
         item_path.mkdir(exist_ok=True, parents=True)
 

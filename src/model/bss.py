@@ -103,15 +103,17 @@ class A2AHiFiPlusGeneratorBSSV2(A2AHiFiPlusGeneratorV2):
         ch = 8
         self.ch = ch
 
+        for param in self.hifi.parameters():
+            param.requires_grad = True
 
         self.mask1 = nn_utils.SpectralMaskNet(
-                in_ch=4,
+                in_ch=8,
                 block_widths=(8, 12, 24, 32),
                 block_depth=4,
                 norm_type='weight'
             )
         self.mask2 = nn_utils.SpectralMaskNet(
-                in_ch=4,
+                in_ch=8,
                 block_widths=(8, 12, 24, 32),
                 block_depth=4,
                 norm_type='weight'
@@ -136,15 +138,15 @@ class A2AHiFiPlusGeneratorBSSV2(A2AHiFiPlusGeneratorV2):
         
         #self.mrf1 = MRF(4, [3, 7, 11], [[[1, 1], [3, 1], [5, 1]], [[1, 1], [3, 1], [5, 1]], [[1, 1], [3, 1], [5, 1]]])
         #self.mrf2 = MRF(4, [3, 7, 11], [[[1, 1], [3, 1], [5, 1]], [[1, 1], [3, 1], [5, 1]], [[1, 1], [3, 1], [5, 1]]])
-
+        
         self.ups_post1 = self.norm(nn.Conv1d(ch // 2, 1, 7, 1, padding=3))
         self.ups_post1.apply(nn_utils.init_weights)
         self.ups_post2 = self.norm(nn.Conv1d(ch // 2, 1, 7, 1, padding=3))
         self.ups_post2.apply(nn_utils.init_weights)
         
-        self.conv_post1 = self.norm(nn.Conv1d(ch // 2, 1, 7, 1, padding=3))
+        self.conv_post1 = self.norm(nn.Conv1d(ch // 1, 1, 7, 1, padding=3))
         self.conv_post1.apply(nn_utils.init_weights)
-        self.conv_post2 = self.norm(nn.Conv1d(ch // 2, 1, 7, 1, padding=3))
+        self.conv_post2 = self.norm(nn.Conv1d(ch // 1, 1, 7, 1, padding=3))
         self.conv_post2.apply(nn_utils.init_weights)
 
     @staticmethod
@@ -167,7 +169,9 @@ class A2AHiFiPlusGeneratorBSSV2(A2AHiFiPlusGeneratorV2):
         x = self.get_melspec(x)
 
         mel_spec_before = x.clone()
-        # x = self.apply_spectralunet(x)
+        x = self.apply_spectralunet(x)
+
+        before = x.reshape(x.shape[0], 2, 80, -1)
 
         #sep1 = x[:, :64, :].clone()
         #sep2 = x[:, 64:, :].clone()
@@ -178,8 +182,11 @@ class A2AHiFiPlusGeneratorBSSV2(A2AHiFiPlusGeneratorV2):
         #sep1 = self.hifi(sep1)
         #sep2 = self.hifi(sep2)
         #x = torch.cat([sep1, sep2], dim=1)
+
+        x = x.detach()
         
-        x = self.hifi(x)
+        x1 = self.hifi(x[:, :80, ...])
+        x2 = self.hifi(x[:, 80:, ...])
         '''
         masked_1 = self.conv_post1(x[:, :self.ch // 2, :])
         masked_2 = self.conv_post2(x[:, self.ch // 2:, :])
@@ -206,16 +213,16 @@ class A2AHiFiPlusGeneratorBSSV2(A2AHiFiPlusGeneratorV2):
         else:
             first_orig = x_orig'''
         
+        #sx[:, :, :] = 0
+        
         if self.use_waveunet and self.waveunet_before_spectralmasknet:
-            x = self.apply_waveunet_a2a(x, x_orig)
+            x1 = self.apply_waveunet_a2a(x1, x_orig)
+        x2 = self.apply_waveunet_a2a(x2, x_orig)
         '''
         y = x.detach()
         if self.use_waveunet and self.waveunet_before_spectralmasknet:
             y = self.apply_waveunet_a2a(y, x_orig)'''
 
-        
-        masked_1 = self.mask1(x[:, :self.ch // 2, :])
-        masked_2 = self.mask2(x[:, self.ch // 2:, :])
 
         #masked_1 = self.mask1(masked_1.detach())
         #masked_2 = self.mask1(masked_2.detach())
@@ -223,8 +230,11 @@ class A2AHiFiPlusGeneratorBSSV2(A2AHiFiPlusGeneratorV2):
         #masked_1 = x[:, :self.ch // 2, :]
         #masked_2 = x[:, self.ch // 2:, :]
 
-        masked_1 = self.waveunet1(torch.cat([masked_1, x_orig], dim=1))
-        masked_2 = self.waveunet2(torch.cat([masked_2, x_orig], dim=1))
+        masked_1 = self.mask1(x1)
+        masked_2 = self.mask2(x2)
+
+        #masked_1 = self.waveunet1(torch.cat([masked_1, x_orig], dim=1))
+        #masked_2 = self.waveunet2(torch.cat([masked_2, x_orig], dim=1))
 
         #masked_1 = self.waveunet1(masked_1)
         #masked_2 = self.waveunet2(masked_2)
@@ -251,7 +261,12 @@ class A2AHiFiPlusGeneratorBSSV2(A2AHiFiPlusGeneratorV2):
         # x = torch.tanh(x)
         # x = nn.functional.softmax(x, dim=1)
         #x = x_orig * x
+        
+
+        #x[:, :, :] *= 1e-12
+
         x = torch.tanh(x)
+        #x = x * x_orig
 
         #x[:, :, :] = 0.1
         current_norm = x.pow(2).mean(dim=-1, keepdim=True).sqrt()
@@ -265,7 +280,7 @@ class A2AHiFiPlusGeneratorBSSV2(A2AHiFiPlusGeneratorV2):
 
         mel_spec_after = self.get_melspec(x)
 
-        return {"separated_audios": x, "fake_melspec": mel_spec_after}
+        return {"separated_audios": x, "fake_melspec": mel_spec_after, "melspec_sep": before}
     
 
 class A2AHiFiPlusGeneratorBSSV3(nn.Module):
@@ -275,12 +290,21 @@ class A2AHiFiPlusGeneratorBSSV3(nn.Module):
         self.hifi1 = generator
         self.hifi2 = generator2
         ch = 8
-
+        '''
         self.spectralunet = nn_utils.SpectralUNet(
                 block_widths=(8, 16, 24, 32, 64),
                 block_depth=5,
                 positional_encoding=True,
                 norm_type='weight',
+            )'''
+        
+        self.waveunet_fir = nn_utils.MultiScaleResnet(
+                (10, 20, 40, 80),
+                4,
+                mode="waveunet_k5",
+                out_width=2,
+                in_width=1,
+                norm_type='weight'
             )
         
         self.waveunet1 = nn_utils.MultiScaleResnet(
@@ -345,12 +369,17 @@ class A2AHiFiPlusGeneratorBSSV3(nn.Module):
         x = mix_audio
         x_orig = mix_audio.clone()
 
+        x = self.waveunet_fir(x)
+        x = nn.functional.softmax(x, dim=1)
+
+        x = x_orig * x
+
         mel = self.get_melspec(x)
 
-        mel = self.apply_spectralunet(mel)
+        #mel = self.apply_spectralunet(mel)
 
-        x1 = self.hifi1(mel[:, :64, :])
-        x2 = self.hifi2(mel[:, 64:, :])
+        x1 = self.hifi1(mel[:, 0, ...])
+        x2 = self.hifi1(mel[:, 1, ...])
         '''
         y1 = self.post1(torch.cat([x1, x_orig, x2[:, 0:1, :]], dim=1))
         y2 = self.post2(torch.cat([x2, x_orig, x1[:, 0:1, :]], dim=1))
@@ -371,6 +400,8 @@ class A2AHiFiPlusGeneratorBSSV3(nn.Module):
 
         x = torch.cat([x1, x2], dim=1)
         x = torch.tanh(x)
+
+        
 
         mel_spec_after = self.get_melspec(x)
 
@@ -440,6 +471,15 @@ class A2AHiFiPlusGeneratorBSSV4(nn.Module):
     
 
 class TestModel(A2AHiFiPlusGeneratorBSSV2):
+    '''
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        ch = 8
+        self.ups_post1 = self.norm(nn.Conv1d(ch // 2, 1, 7, 1, padding=3))
+        self.ups_post1.apply(nn_utils.init_weights)
+        self.ups_post2 = self.norm(nn.Conv1d(ch // 2, 1, 7, 1, padding=3))
+        self.ups_post2.apply(nn_utils.init_weights)'''
+
     def forward(self, mix_audio, **batch):
         target_norm = mix_audio.pow(2).mean(dim=-1, keepdim=True).sqrt().detach()
         x = mix_audio

@@ -194,11 +194,10 @@ class BSSDiscriminator(nn.Module):
         for key, value in self.msd(audios, ids).items():
             res[key].extend(value)
 
-        '''
         if self.channels != C:
-            # res["estimation"] = [x.reshape(B, C, -1) for x in res["estimation"]]
+            res["estimation"] = [x.reshape(B, C, -1) for x in res["estimation"]]
             for i in range(len(res["fmap"])):
-                res["fmap"][i] = [x.reshape(B, C, *x.shape[1:]) for x in res["fmap"][i]]'''
+                res["fmap"][i] = [x.reshape(B, C, *x.shape[1:]) for x in res["fmap"][i]]
 
         return res
     

@@ -1,0 +1,6 @@
+_target_: src.model.Dual_RNN_model
+in_channels: 256
+out_channels: 64
+hidden_channels: 128
+bidirectional: True
+num_layers: 6

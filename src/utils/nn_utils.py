@@ -553,7 +553,7 @@ class SpectralUNet(nn.Module):
         )
 
         self.post_conv_1d = nn.Sequential(
-            norm(nn.Conv1d(513, 128, 1, 1, padding=0)),
+            norm(nn.Conv1d(513, 160, 1, 1, padding=0)),
         )
 
         self.mel2lin = None
