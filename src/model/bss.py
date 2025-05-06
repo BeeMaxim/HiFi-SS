@@ -160,127 +160,43 @@ class A2AHiFiPlusGeneratorBSSV2(A2AHiFiPlusGeneratorV2):
             x = x.view(shape[0], -1, x.shape[-1])
         return x
     
-    def forward(self, mix_audio, **batch):
-        target_norm = mix_audio.pow(2).mean(dim=-1, keepdim=True).sqrt().detach()
-        x = mix_audio
-        x_orig = x.clone()
-
-        # x_orig = x_orig[:, :, : x_orig.shape[2] // 1024 * 1024]
-        x = self.get_melspec(x)
-
-        mel_spec_before = x.clone()
-        x = self.apply_spectralunet(x)
-
-        before = x.reshape(x.shape[0], 2, 80, -1)
-
-        #sep1 = x[:, :64, :].clone()
-        #sep2 = x[:, 64:, :].clone()
-
-        #sep1 = self.sep1(sep1)
-        #sep2 = self.sep2(sep2)
-
-        #sep1 = self.hifi(sep1)
-        #sep2 = self.hifi(sep2)
-        #x = torch.cat([sep1, sep2], dim=1)
-
-        x = x.detach()
-        
+    def forward_chunk(self, x):
         x1 = self.hifi(x[:, :80, ...])
         x2 = self.hifi(x[:, 80:, ...])
-        '''
-        masked_1 = self.conv_post1(x[:, :self.ch // 2, :])
-        masked_2 = self.conv_post2(x[:, self.ch // 2:, :])
-
-        y = torch.cat([masked_1, masked_2], dim=1)
-        y = torch.tanh(y)'''
-
-        '''
-        y = self.ups_post(x)
-        y = torch.tanh(y)
-
-        y_mel = self.get_melspec(y)'''
-
-        '''
-        x = self.hi1(x)
-        x = self.hi2(x)
-        x = self.hi3(x)'''
-
-        '''
-        if self.training:
-            dropout_rate = 0.9
-            drop_mask = (torch.rand(x_orig.shape[0]) < dropout_rate).float()
-            first_orig = x_orig * drop_mask[:, None, None].to(x_orig.device) / dropout_rate
-        else:
-            first_orig = x_orig'''
-        
-        #sx[:, :, :] = 0
-        
-        if self.use_waveunet and self.waveunet_before_spectralmasknet:
-            x1 = self.apply_waveunet_a2a(x1, x_orig)
-        x2 = self.apply_waveunet_a2a(x2, x_orig)
-        '''
-        y = x.detach()
-        if self.use_waveunet and self.waveunet_before_spectralmasknet:
-            y = self.apply_waveunet_a2a(y, x_orig)'''
-
-
-        #masked_1 = self.mask1(masked_1.detach())
-        #masked_2 = self.mask1(masked_2.detach())
-
-        #masked_1 = x[:, :self.ch // 2, :]
-        #masked_2 = x[:, self.ch // 2:, :]
+   
+        x1 = self.apply_waveunet_a2a(x1, None)
+        x2 = self.apply_waveunet_a2a(x2, None)
 
         masked_1 = self.mask1(x1)
         masked_2 = self.mask2(x2)
 
-        #masked_1 = self.waveunet1(torch.cat([masked_1, x_orig], dim=1))
-        #masked_2 = self.waveunet2(torch.cat([masked_2, x_orig], dim=1))
-
-        #masked_1 = self.waveunet1(masked_1)
-        #masked_2 = self.waveunet2(masked_2)
-
-        #masked_1 = self.mrf1(masked_1)
-        #masked_2 = self.mrf2(masked_2)
-
-        #masked_11 = self.waveunet11(torch.cat([masked_1, masked_2[:, :self.ch // 4, :]], dim=1))
-        #masked_12 = self.waveunet12(torch.cat([masked_2, masked_1[:, :self.ch // 4, :]], dim=1))
-
-        #masked_1 += self.spectralmasknet_skip_connect(x)
-        #masked_2 += self.spectralmasknet_skip_connect(x)
-        '''
-        if self.use_waveunet and not self.waveunet_before_spectralmasknet:
-            x = self.apply_waveunet_a2a(x, x_orig)'''
-
-        # x = self.conv_post(x)
-
         masked_1 = self.conv_post1(masked_1)
         masked_2 = self.conv_post2(masked_2)
 
-
         x = torch.cat([masked_1, masked_2], dim=1)
-        # x = torch.tanh(x)
-        # x = nn.functional.softmax(x, dim=1)
-        #x = x_orig * x
-        
-
-        #x[:, :, :] *= 1e-12
 
         x = torch.tanh(x)
-        #x = x * x_orig
+        return x
+    
+    def forward(self, mix_audio, **batch):
+        mel = self.get_melspec(mix_audio)
+        x = self.apply_spectralunet(mel)
 
-        #x[:, :, :] = 0.1
-        current_norm = x.pow(2).mean(dim=-1, keepdim=True).sqrt()
+        L = x.shape[-1]
+        N = 4
 
-        # 
-        # x = x * (target_norm / (current_norm + 1e-12))
-        '''
-        print(target_norm, current_norm)
-        print(target_norm / current_norm)
-        print('---------------------------')'''
+        processed = []
+
+        for i in range(N):
+            y = x[..., i * (L // N) : (i + 1) * (L // N)]
+            y = self.forward_chunk(y)
+            processed.append(y)
+
+        x = torch.cat(processed, dim=-1)
 
         mel_spec_after = self.get_melspec(x)
 
-        return {"separated_audios": x, "fake_melspec": mel_spec_after, "melspec_sep": before}
+        return {"separated_audios": x, "fake_melspec": mel_spec_after}
     
 
 class A2AHiFiPlusGeneratorBSSV3(nn.Module):

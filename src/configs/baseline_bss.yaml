@@ -1,5 +1,5 @@
 defaults:
-  - model: dprnn
+  - model: bss_v2
   - writer: wandb
   - metrics: bss
   - datasets: librispeech_mix
