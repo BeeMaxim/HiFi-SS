@@ -13,5 +13,5 @@ test:
   data_dir: D:\HiFi-SS\data\datasets\librispeech
   index_dir: indexes
   instance_transforms: ${transforms.instance_transforms.train}
-  limit: 500
+  limit: 150
  # limit: 2

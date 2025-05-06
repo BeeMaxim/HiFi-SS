@@ -39,12 +39,12 @@ def main(config):
     # setup data_loader instances
     # batch_transforms should be put on device
     dataloaders, batch_transforms, speaker_ids = get_dataloaders(config, device)
-
+    
     generator = instantiate(config.model).to(device)
     discriminator = BSSDiscriminator(use_id_channel=False, embedding_count=speaker_ids, channel_count=1).to(device)
 
-    logger.info(generator)
-    logger.info(discriminator)
+    #logger.info(generator)
+    #logger.info(discriminator)
 
     # get function handles of loss and metrics
     generator_loss_function = instantiate(config.generator_loss_function).to(device)

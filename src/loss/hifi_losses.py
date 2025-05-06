@@ -190,7 +190,7 @@ class BSSGeneratorLoss(nn.Module):
         # print('total', losses['snr_loss'])
         losses["generator_loss"] = losses["feature_loss"] + losses["g_loss"] + losses["l1_loss"] * 45 # + losses["snr_loss"]
         # losses["generator_loss"] = losses["l1_loss"] * 45 + losses["snr_loss"]
-        # losses["generator_loss"] = losses["l1_loss"] * 45
+        #losses["generator_loss"] = losses["snr_loss"] * 1
 
         # print("OTHER", time.time() - st)
         # losses["generator_loss"] = losses["l1_loss"] * 45

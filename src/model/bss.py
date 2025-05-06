@@ -160,12 +160,17 @@ class A2AHiFiPlusGeneratorBSSV2(A2AHiFiPlusGeneratorV2):
             x = x.view(shape[0], -1, x.shape[-1])
         return x
     
-    def forward_chunk(self, x):
+    def load_state_dict(self, state_dict):
+        custom_state_dict = {k: v for k, v in state_dict.items() if k.startswith('hifi.') or k.startswith('spectralunet.')}
+        
+        super().load_state_dict(custom_state_dict, strict=False)
+    
+    def forward_chunk(self, x, x_orig):
         x1 = self.hifi(x[:, :80, ...])
         x2 = self.hifi(x[:, 80:, ...])
    
-        x1 = self.apply_waveunet_a2a(x1, None)
-        x2 = self.apply_waveunet_a2a(x2, None)
+        x1 = self.apply_waveunet_a2a(x1, x_orig)
+        x2 = self.apply_waveunet_a2a(x2, x_orig)
 
         masked_1 = self.mask1(x1)
         masked_2 = self.mask2(x2)
@@ -179,17 +184,18 @@ class A2AHiFiPlusGeneratorBSSV2(A2AHiFiPlusGeneratorV2):
         return x
     
     def forward(self, mix_audio, **batch):
+        x_orig = mix_audio.clone()
         mel = self.get_melspec(mix_audio)
         x = self.apply_spectralunet(mel)
 
         L = x.shape[-1]
-        N = 4
+        N = 1
 
         processed = []
 
         for i in range(N):
             y = x[..., i * (L // N) : (i + 1) * (L // N)]
-            y = self.forward_chunk(y)
+            y = self.forward_chunk(y, x_orig[..., i * (x_orig.size(-1) // N) : (i + 1) * (x_orig.size(-1) // N)])
             processed.append(y)
 
         x = torch.cat(processed, dim=-1)

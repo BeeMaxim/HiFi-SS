@@ -132,7 +132,7 @@ class LibrispeechMixDataset(BaseDataset):
         random.shuffle(shuffled_index)
 
         # Generate mixes
-        for i in tqdm(range(len(shuffled_index)), desc=f"Creating mixes for {part}"):
+        for i in tqdm(range(0, len(shuffled_index), 2), desc=f"Creating mixes for {part}"):
             j = (i + 1) % len(shuffled_index)
             entry1 = shuffled_index[i]
             entry2 = shuffled_index[j]
