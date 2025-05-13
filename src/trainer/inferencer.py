@@ -140,10 +140,28 @@ class Inferencer(BaseTrainer):
             audios = batch["audios"][i]
 
             reordered = separated
+            '''
+            print(snr(separated[[1, 0], :], audios))
+            print(snr(separated, audios))
+            print('-------------------------')'''
+
             if snr(separated[[1, 0], :], audios) > snr(separated, audios):
                 reordered = separated[[1, 0], :]
-
+            #print(separated.shape, reordered.shape)
+            cur_norm = reordered.pow(2).mean(dim=-1, keepdim=True).sqrt().detach()
+            target_norm = audios.pow(2).mean(dim=-1, keepdim=True).sqrt().detach()
+            #reordered = reordered * target_norm / cur_norm * 5
             order_list.append(reordered)
+            '''
+            if self.save_path is not None:
+                # you can use safetensors or other lib here
+                torchaudio.save(self.save_path / part /  f"pred_{batch_idx}_0.wav", reordered[:1, :].cpu(), sample_rate=16000)
+                torchaudio.save(self.save_path / part /  f"ref_{batch_idx}_0.wav", audios[:1, :].cpu(), sample_rate=16000)
+
+                torchaudio.save(self.save_path / part /  f"pred_{batch_idx}_1.wav", reordered[1:, :].cpu(), sample_rate=16000)
+                torchaudio.save(self.save_path / part /  f"ref_{batch_idx}_1.wav", audios[1:, :].cpu(), sample_rate=16000)
+                # torch.save(output, self.save_path / part / f"output_{output_id}.pth")'''
+            
             '''
             clean_audio_predicted = batch["clean_audio_predicted"][i].clone()
             clean_audio = batch["clean_audio"][i].clone()

@@ -1,4 +1,3 @@
 _target_: src.model.A2AHiFiPlusGeneratorBSSV3
 defaults:
   - generator: classic
-  - generator2: classic

@@ -12,5 +12,5 @@ class CBAK(BaseMetric):
         if device == "auto":
             device = "cuda" if torch.cuda.is_available() else "cpu"
 
-    def __call__(self, clean_audio_predicted, clean_audio, **kwargs) -> float:
-        return composite_eval(clean_audio_predicted, clean_audio)["cbak"]
+    def __call__(self, reordered, audios, **kwargs) -> float:
+        return (composite_eval(reordered[:, :1, :], audios[:, :1, :])["cbak"] + composite_eval(reordered[:, 1:, :], audios[:, 1:, :])["cbak"]) / 2

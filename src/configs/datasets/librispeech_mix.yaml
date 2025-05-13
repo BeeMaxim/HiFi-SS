@@ -1,17 +1,17 @@
 train:
   _target_: src.datasets.LibrispeechMixDataset
   part: "train-clean-100"
-  segment_size: 32768
+  segment_size: 16284
   data_dir: D:\HiFi-SS\data\datasets\librispeech
   index_dir: indexes
   instance_transforms: ${transforms.instance_transforms.train}
-  limit: 300
+  limit: 1000
 test:
   _target_: src.datasets.LibrispeechMixDataset
   part: "test-clean"
-  segment_size: 32768
+  segment_size: 16384
   data_dir: D:\HiFi-SS\data\datasets\librispeech
   index_dir: indexes
   instance_transforms: ${transforms.instance_transforms.train}
-  limit: 150
+  limit: 20
  # limit: 2

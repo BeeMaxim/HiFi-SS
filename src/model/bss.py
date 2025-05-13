@@ -66,6 +66,11 @@ class A2AHiFiPlusGeneratorBSS(A2AHiFiPlusGeneratorV2):
             x = x.view(shape[0], -1, x.shape[-1])
         return x
     
+    def load_state_dict(self, state_dict):
+        custom_state_dict = {k: v for k, v in state_dict.items() if k.startswith('hifi.') or k.startswith('spectralunet.')}
+        
+        super().load_state_dict(state_dict, strict=False)
+    
     def forward(self, mix_audio, **batch):
         x = mix_audio
         x_orig = x.clone()
@@ -102,9 +107,11 @@ class A2AHiFiPlusGeneratorBSSV2(A2AHiFiPlusGeneratorV2):
 
         ch = 8
         self.ch = ch
-
+        '''
         for param in self.hifi.parameters():
-            param.requires_grad = True
+            param.requires_grad = False
+        for param in self.spectralunet.parameters():
+            param.requires_grad = False'''
 
         self.mask1 = nn_utils.SpectralMaskNet(
                 in_ch=8,
@@ -149,6 +156,7 @@ class A2AHiFiPlusGeneratorBSSV2(A2AHiFiPlusGeneratorV2):
         self.conv_post2 = self.norm(nn.Conv1d(ch // 1, 1, 7, 1, padding=3))
         self.conv_post2.apply(nn_utils.init_weights)
 
+
     @staticmethod
     def get_melspec(x):
         shape = x.shape
@@ -163,7 +171,7 @@ class A2AHiFiPlusGeneratorBSSV2(A2AHiFiPlusGeneratorV2):
     def load_state_dict(self, state_dict):
         custom_state_dict = {k: v for k, v in state_dict.items() if k.startswith('hifi.') or k.startswith('spectralunet.')}
         
-        super().load_state_dict(custom_state_dict, strict=False)
+        super().load_state_dict(state_dict, strict=False)
     
     def forward_chunk(self, x, x_orig):
         x1 = self.hifi(x[:, :80, ...])
@@ -172,8 +180,10 @@ class A2AHiFiPlusGeneratorBSSV2(A2AHiFiPlusGeneratorV2):
         x1 = self.apply_waveunet_a2a(x1, x_orig)
         x2 = self.apply_waveunet_a2a(x2, x_orig)
 
-        masked_1 = self.mask1(x1)
-        masked_2 = self.mask2(x2)
+        #masked_1 = self.mask1(x1)
+        #masked_2 = self.mask1(x2)
+        masked_1 = self.apply_spectralmasknet(x1)
+        masked_2 = self.apply_spectralmasknet(x2)
 
         masked_1 = self.conv_post1(masked_1)
         masked_2 = self.conv_post2(masked_2)
@@ -186,6 +196,7 @@ class A2AHiFiPlusGeneratorBSSV2(A2AHiFiPlusGeneratorV2):
     def forward(self, mix_audio, **batch):
         x_orig = mix_audio.clone()
         mel = self.get_melspec(mix_audio)
+        #mel = self.enc(mel.transpose(1, 2)).transpose(1, 2)
         x = self.apply_spectralunet(mel)
 
         L = x.shape[-1]
@@ -205,12 +216,9 @@ class A2AHiFiPlusGeneratorBSSV2(A2AHiFiPlusGeneratorV2):
         return {"separated_audios": x, "fake_melspec": mel_spec_after}
     
 
-class A2AHiFiPlusGeneratorBSSV3(nn.Module):
-    def __init__(self, generator, generator2, **kwargs):
-        super().__init__()
-
-        self.hifi1 = generator
-        self.hifi2 = generator2
+class A2AHiFiPlusGeneratorBSSV3(A2AHiFiPlusGeneratorV2):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
         ch = 8
         '''
         self.spectralunet = nn_utils.SpectralUNet(
@@ -220,21 +228,26 @@ class A2AHiFiPlusGeneratorBSSV3(nn.Module):
                 norm_type='weight',
             )'''
         
-        self.waveunet_fir = nn_utils.MultiScaleResnet(
-                (10, 20, 40, 80),
-                4,
-                mode="waveunet_k5",
-                out_width=2,
-                in_width=1,
+        self.mask1 = nn_utils.SpectralMaskNet(
+                in_ch=4,
+                block_widths=(8, 12, 24, 32),
+                block_depth=4,
                 norm_type='weight'
             )
+        self.mask2 = nn_utils.SpectralMaskNet(
+                in_ch=4,
+                block_widths=(8, 12, 24, 32),
+                block_depth=4,
+                norm_type='weight'
+            )
+    
         
         self.waveunet1 = nn_utils.MultiScaleResnet(
                 (10, 20, 40, 80),
                 4,
                 mode="waveunet_k5",
-                out_width=8,
-                in_width=9,
+                out_width=4,
+                in_width=5,
                 norm_type='weight'
             )
 
@@ -242,8 +255,8 @@ class A2AHiFiPlusGeneratorBSSV3(nn.Module):
                 (10, 20, 40, 80),
                 4,
                 mode="waveunet_k5",
-                out_width=8,
-                in_width=9,
+                out_width=4,
+                in_width=5,
                 norm_type='weight'
             )
 
@@ -282,26 +295,33 @@ class A2AHiFiPlusGeneratorBSSV3(nn.Module):
                 norm_type='weight'
             )
         
-        self.conv_post1 = weight_norm(nn.Conv1d(ch, 1, 7, 1, padding=3))
+        self.conv_post1 = weight_norm(nn.Conv1d(ch // 2, 1, 7, 1, padding=3))
         self.conv_post1.apply(nn_utils.init_weights)
-        self.conv_post2 = weight_norm(nn.Conv1d(ch, 1, 7, 1, padding=3))
+        self.conv_post2 = weight_norm(nn.Conv1d(ch // 2, 1, 7, 1, padding=3))
         self.conv_post2.apply(nn_utils.init_weights)
+
+    def load_state_dict(self, state_dict):
+        custom_state_dict = {k: v for k, v in state_dict.items() if k.startswith('hifi.') or k.startswith('spectralunet.')
+                             or k.startswith('waveunet.')}
+        print(custom_state_dict.keys())
+        
+        super().load_state_dict(custom_state_dict, strict=False)
 
     def forward(self, mix_audio, **batch):
         x = mix_audio
         x_orig = mix_audio.clone()
 
-        x = self.waveunet_fir(x)
-        x = nn.functional.softmax(x, dim=1)
-
-        x = x_orig * x
-
         mel = self.get_melspec(x)
 
-        #mel = self.apply_spectralunet(mel)
 
-        x1 = self.hifi1(mel[:, 0, ...])
-        x2 = self.hifi1(mel[:, 1, ...])
+        mel = self.apply_spectralunet(mel)
+
+        x = self.hifi(mel)
+
+        x = self.apply_waveunet_a2a(x, x_orig)
+
+        x1 = self.mask1(x[:, :4, :])
+        x2 = self.mask2(x[:, 4:, :])
         '''
         y1 = self.post1(torch.cat([x1, x_orig, x2[:, 0:1, :]], dim=1))
         y2 = self.post2(torch.cat([x2, x_orig, x1[:, 0:1, :]], dim=1))
@@ -353,28 +373,79 @@ class A2AHiFiPlusGeneratorBSSV3(nn.Module):
         return x
     
 
-class A2AHiFiPlusGeneratorBSSV4(nn.Module):
-    def __init__(self, generator, **kwargs):
-        super().__init__()
-        self.hifi = generator
+class A2AHiFiPlusGeneratorBSSV4(A2AHiFiPlusGeneratorV2):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        self.hifi1 = self.hifi
+
+        self.mask1 = nn_utils.SpectralMaskNet(
+                in_ch=4,
+                block_widths=(8, 12, 24, 32),
+                block_depth=4,
+                norm_type='weight'
+            )
+        self.mask2 = nn_utils.SpectralMaskNet(
+                in_ch=4,
+                block_widths=(8, 12, 24, 32),
+                block_depth=4,
+                norm_type='weight'
+            )
+        
+        self.waveunet1 = nn_utils.MultiScaleResnet(
+                (10, 20, 40, 80),
+                4,
+                mode="waveunet_k5",
+                out_width=4,
+                in_width=5,
+                norm_type='weight'
+            )
+
+        self.waveunet2 = nn_utils.MultiScaleResnet(
+                (10, 20, 40, 80),
+                4,
+                mode="waveunet_k5",
+                out_width=4,
+                in_width=5,
+                norm_type='weight'
+            )
 
         self.conv_post1 = weight_norm(nn.Conv1d(4, 1, 7, 1, padding=3))
         self.conv_post1.apply(nn_utils.init_weights)
         self.conv_post2 = weight_norm(nn.Conv1d(4, 1, 7, 1, padding=3))
         self.conv_post2.apply(nn_utils.init_weights)
 
+    def load_state_dict(self, state_dict):
+        custom_state_dict = {k: v for k, v in state_dict.items() if k.startswith('hifi1.') or k.startswith('conv_post')}
+        
+        super().load_state_dict(state_dict, strict=False)
+
     def forward(self, mix_audio, **batch):
+        x_orig = mix_audio.clone()
+
         x = self.get_melspec(mix_audio)
 
         x = self.hifi(x)
-        x1 = self.conv_post1(x[:, :4, :])
-        x2 = self.conv_post2(x[:, 4:, :])
 
-        mask = torch.cat([x1, x2], dim=1)
+        x = self.apply_waveunet_a2a(x, x_orig)
 
-        mask = nn.functional.softmax(mask, dim=1)
+        masked_1 = x[:, :4, :]
+        masked_2 = x[:, 4:, :]
+        '''
+        x = self.apply_waveunet_a2a(x, x_orig)
 
-        x = mix_audio * mask
+        masked_1 = self.mask1(x[:, :4, :])
+        masked_2 = self.mask2(x[:, 4:, :])
+
+        masked_1 = self.waveunet1(torch.cat([masked_1, x_orig], dim=1))
+        masked_2 = self.waveunet2(torch.cat([masked_2, x_orig], dim=1))'''
+
+        x1 = self.conv_post1(masked_1)
+        x2 = self.conv_post2(masked_2)
+
+        x = torch.cat([x1, x2], dim=1)
+        x = torch.tanh(x)
+
 
         mel = self.get_melspec(x)
 

@@ -10,4 +10,4 @@ inferencer:
   device: auto # device name or "auto"
   save_path: "example" # any name here, can be a dataset name
   seed: 1
-  from_pretrained: D:\HiFi-SS\checkpoint-epoch15.pth # path to the pretrained model
+  from_pretrained: D:\HiFi-SS\v2_post_snr_discs-epoch47.pth # path to the pretrained model

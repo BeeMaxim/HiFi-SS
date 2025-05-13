@@ -1,5 +1,5 @@
 defaults:
-  - model: bss_v2
+  - model: tiger
   - writer: wandb
   - metrics: bss
   - datasets: librispeech_mix
@@ -8,7 +8,7 @@ defaults:
   - _self_
 generator_optimizer:
   _target_: torch.optim.Adam
-  lr: 1e-3
+  lr: 5e-4
 discriminator_optimizer:
   _target_: torch.optim.Adam
   lr: 1e-4
@@ -26,7 +26,7 @@ trainer:
   epoch_len: null
   device_tensors: ["mix_audio", "ids", "audios"] # which tensors should be on device (ex. GPU)
   resume_from: null # null or path to the checkpoint dir with *.pth and config.yaml
-  from_pretrained: D:\HiFi-SS\backbone.pth
+  #from_pretrained: D:\HiFi-SS\v1_pretrain_concat_l1_nodiscs-epoch60.pth
   device: auto # device name or "auto"
   override: True # if True, will override the previous run with the same name
   # monitor: "max test_MulticlassAccuracy" # "off" or "max/min metric_name", i.e. our goal is to maximize/minimize metric
@@ -36,7 +36,7 @@ trainer:
   save_dir: "saved"
   seed: 1
   inference: True
-  max_grad_norm: 5
+ # max_grad_norm: 5
 inferencer: # to calculate full metrics on train
   device_tensors: ["mix_audio", "ids", "audios"] # which tensors should be on device (ex. GPU)
   device: auto # device name or "auto"

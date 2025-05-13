@@ -4,6 +4,7 @@ from src.model.disriminators import Discriminator
 from src.model.generator.istftnet import Generator
 from src.model.conv_tas_net import ConvTasNet, TasNet
 from src.model.dprnn import Dual_RNN_model
+from src.model.tiger import TIGER, TIGERSpec
 
 __all__ = [
     "A2AHiFiPlusGeneratorV2",
@@ -16,6 +17,8 @@ __all__ = [
     "BSSDiscriminator",
     "ConvTasNet",
     "Generator",
+    "TIGER",
+    "TIGERSpec",
     "TasNet",
     "TestModel"
 ]

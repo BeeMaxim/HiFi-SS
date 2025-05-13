@@ -26,5 +26,8 @@ class BSSPESQ(BaseMetric):
         self.pesq = PerceptualEvaluationSpeechQuality(16000, 'wb')
 
     def __call__(self, reordered, audios, **kwargs) -> float:
-        pesq_result = self.pesq(reordered, audios)
-        return pesq_result.item()
+        try:
+            pesq_result = self.pesq(reordered, audios)
+            return pesq_result.item()
+        except:
+            return -0.5

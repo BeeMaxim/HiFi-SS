@@ -1,5 +1,5 @@
 defaults:
-  - model: bss_v2
+  - model: tiger
   - _self_
 trainer:
   device: auto
