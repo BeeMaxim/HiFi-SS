@@ -1,0 +1,17 @@
+train:
+  _target_: src.datasets.LRS2Mix
+  part: "train"
+  segment_size: 16384
+  data_dir: D:\HiFi-SS\data\datasets\lrs2mix
+  index_dir: indexes
+  instance_transforms: ${transforms.instance_transforms.train}
+  limit: 2000
+test:
+  _target_: src.datasets.LRS2Mix
+  part: "test"
+  segment_size: 16384
+  data_dir: D:\HiFi-SS\data\datasets\lrs2mix
+  index_dir: indexes
+  instance_transforms: ${transforms.instance_transforms.train}
+  limit: 500
+ # limit: 2

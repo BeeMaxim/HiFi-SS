@@ -151,7 +151,8 @@ class Inferencer(BaseTrainer):
             cur_norm = reordered.pow(2).mean(dim=-1, keepdim=True).sqrt().detach()
             target_norm = audios.pow(2).mean(dim=-1, keepdim=True).sqrt().detach()
             #reordered = reordered * target_norm / cur_norm * 5
-            order_list.append(reordered)
+            max_peak = torch.max(reordered.abs(), dim=-1, keepdim=True).values.detach()
+            order_list.append(reordered / max_peak * 0.95)
             '''
             if self.save_path is not None:
                 # you can use safetensors or other lib here

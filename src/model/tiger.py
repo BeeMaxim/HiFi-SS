@@ -6,10 +6,109 @@ import torch.nn.functional as F
 import math
 import src.utils.nn_utils as nn_utils
 from src.model.hifi import mel_spectrogram
+from src.model.fcc_modules import FFCResNetBlock
 from torch.nn.utils import weight_norm, spectral_norm
 
 
 from src.model import normalizations, activations
+
+
+def get_mag_and_phase(x):
+    stft = torch.stft(
+        x,
+        n_fft=1024,
+        hop_length=256,
+        win_length=1024,
+        window=torch.hann_window(1024).to(x.device),
+        center=True,
+        pad_mode="reflect",
+        normalized=False,
+        onesided=True,
+        return_complex=True,
+    )
+
+    magnitudes = torch.abs(stft)
+    phases = torch.angle(stft) 
+
+    return magnitudes, phases
+
+
+def get_inverse(magnitudes, phases, length):
+    x = magnitudes * torch.exp(1j * phases)
+    print(x[0].shape)
+    stft = torch.istft(
+        x,
+        n_fft=1024,
+        hop_length=256,
+        win_length=1024,
+        window=torch.hann_window(1024).to(x.device),
+        center=True,
+        normalized=False,
+        onesided=True,
+        return_complex=False,
+        length=length
+    )
+
+    return stft.unsqueeze(0)
+
+class PhaseFixer(nn.Module):
+    def __init__(self):
+        super().__init__()
+
+    def forward(self, x, mix_audio):
+        b, channels = x.shape[:2]
+
+        x = x.view(x.shape[0] * x.shape[1], -1)
+        stft = torch.stft(
+            x,
+            n_fft=1024,
+            hop_length=256,
+            win_length=1024,
+            window=torch.hann_window(1024).to(x.device),
+            center=True,
+            pad_mode="reflect",
+            normalized=False,
+            onesided=True,
+            return_complex=True,
+        )
+
+        mix_audio = mix_audio.clone().view(mix_audio.shape[0] * mix_audio.shape[1], -1)
+        mix_stft = torch.stft(
+            mix_audio,
+            n_fft=1024,
+            hop_length=256,
+            win_length=1024,
+            window=torch.hann_window(1024).to(x.device),
+            center=True,
+            pad_mode="reflect",
+            normalized=False,
+            onesided=True,
+            return_complex=True,
+        )
+
+        magnitudes = torch.abs(stft)
+        phases = torch.angle(stft) 
+        mix_magnitudes = torch.abs(mix_stft)
+        mix_phases = torch.angle(mix_stft)
+
+        if channels > 1:
+            mix_phases = torch.cat([mix_phases] * channels, dim=0).view(b * channels, mix_phases.size(-2), mix_phases.size(-1))
+        y = magnitudes * torch.exp(mix_phases * 1j)
+
+        stft = torch.istft(
+            y,
+            n_fft=1024,
+            hop_length=256,
+            win_length=1024,
+            window=torch.hann_window(1024).to(x.device),
+            center=True,
+            normalized=False,
+            onesided=True,
+            return_complex=False,
+            length=mix_audio.size(-1)
+        )
+
+        return stft.view(b, channels, -1)
 
 
 def GlobLN(nOut):
@@ -514,9 +613,9 @@ class TIGER(nn.Module):
     def __init__(
         self,
         generator,
-        out_channels=128,
-        in_channels=256,
-        num_blocks=4,
+        out_channels=64,# 128
+        in_channels=128, # 256
+        num_blocks=4, # 4
         upsampling_depth=5,
         att_n_head=4,
         att_hid_chan=4,
@@ -549,7 +648,7 @@ class TIGER(nn.Module):
         self.band_width += [bandwidth_500]*8
         self.band_width.append(self.enc_dim - np.sum(self.band_width))
         print(self.enc_dim)
-        self.band_width = [4] * 20
+        self.band_width = [1] * 80
         self.nband = len(self.band_width)
         print(self.band_width)
         
@@ -586,19 +685,37 @@ class TIGER(nn.Module):
                 in_width=8,
                 norm_type='weight'
             )
+        '''
+        self.sep_waveunet = nn_utils.MultiScaleResnet(
+                (10, 20, 40, 80),
+                4,
+                mode="waveunet_k5",
+                out_width=2,
+                in_width=1,
+                norm_type='weight'
+            )'''
+        
+        # self.ffc = FFCResNetBlock(8, 8, alpha_in=1.0, alpha_out=1.0)
         
         self.make_spectralmasknet_skip_connect(8)
         self.make_waveunet_skip_connect(8)
-        self.waveunet_input = "hifi"
+        self.waveunet_input = "both"
 
         self.waveunet_conv_pre = weight_norm(
                 nn.Conv1d(
-                    1 + 8, 8, 1
+                    8 + 1, 8, 1
                 )
             )
         
         self.conv_post = weight_norm(nn.Conv1d(8, 1, 7, 1, padding=3))
         self.conv_post.apply(nn_utils.init_weights)
+        self.voc_post = weight_norm(nn.Conv1d(8, 1, 7, 1, padding=3))
+        self.voc_post.apply(nn_utils.init_weights)
+
+        #self.phase_fixer = PhaseFixer()
+        '''
+        for param in self.hifi.parameters():
+            param.requires_grad = False'''
 
     def pad_input(self, input, window, stride):
         """
@@ -647,6 +764,12 @@ class TIGER(nn.Module):
         x += self.waveunet_skip_connect(x_a)
 
         return x
+    
+    def load_state_dict(self, state_dict):
+        #print(state_dict['generator'].keys())
+        #custom_state_dict = {k: v for k, v in state_dict['generator'].items() if not k.startswith('conv_pre.') and not k.startswith('conv_post.')}
+        
+        super().load_state_dict(state_dict, strict=True)
 
         
     def forward(self, mix_audio, **batch):
@@ -700,7 +823,8 @@ class TIGER(nn.Module):
         sep_subband_spec = []
         for i in range(self.nband):
             this_output = self.mask[i](sep_output[:,i]).view(batch_size*nch, 1, 1, self.num_output, self.band_width[i], -1)
-            this_mask = this_output[:,0]  # B*nch, 2, K, BW, T
+            #this_mask = this_output[:,0]  # B*nch, 2, K, BW, T
+            this_mask = this_output[:,0] #* torch.sigmoid(this_output[:,1]) 
             this_mask_real = this_mask[:,0]  # B*nch, K, BW, T
             #this_mask_imag = this_mask[:,1]  # B*nch, K, BW, T
             # force mask sum to 1
@@ -713,37 +837,113 @@ class TIGER(nn.Module):
             #est_spec_real = subband_spec[i].unsqueeze(1) * this_mask_real  # B*nch, K, BW, T
             #est_spec_imag = subband_spec[i].real.unsqueeze(1) * this_mask_imag + subband_spec[i].imag.unsqueeze(1) * this_mask_real  # B*nch, K, BW, T
             #sep_subband_spec.append(torch.complex(est_spec_real, est_spec_imag))
+            #his_mask_real_sum = this_mask_real.sum(1).unsqueeze(1)  # B*nch, 1, BW, T
+            #this_mask_real = this_mask_real - (this_mask_real_sum - 1) / self.num_output
             sep_subband_spec.append(this_mask_real)
         sep_subband_spec = torch.cat(sep_subband_spec, 2)
 
-        #melspec = sep_subband_spec
+        melspec1 = sep_subband_spec
 
         '''
         output = torch.istft(sep_subband_spec.view(batch_size*nch*self.num_output, self.enc_dim, -1), 
                              n_fft=self.win, hop_length=self.stride,
                              window=torch.hann_window(self.win).to(input.device).type(input.type()), length=nsample)
         output = output.view(batch_size*nch, self.num_output, -1)'''
+        #sep_subband_spec = F.sigmoid(sep_subband_spec)
+        #sep_subband_spec = sep_subband_spec / sep_subband_spec.sum(dim=1, keepdim=True)
+
+        #mel = torch.log(torch.exp(mel) * sep_subband_spec)
+
+
+        #x1 = torch.log(torch.exp(mel) * sep_subband_spec[:, 0, ...])
+        #x2 = torch.log(torch.exp(mel) * sep_subband_spec[:, 1, ...])
+
+        #melspec = torch.stack([x1, x2], dim=1)
+
+        #print(mel.shape, melspec.shape)
+        #print(mel[0, :5, :5])
+
+        #x1 = self.hifi(x1)
+        #x2 = self.hifi(x2)
+
+        melspec = sep_subband_spec
+        last_1 = x_orig
+        last_2 = x_orig
+
+        for i in range(1):
+            x1 = self.hifi(melspec[:, 0, ...])
+            x2 = self.hifi(melspec[:, 1, ...])
+
+            y1 = self.voc_post(x1)
+            y2 = self.voc_post(x2)
+
+            y = torch.cat([y1, y2], dim=1)
+            melspec = self.get_melspec(y)
+
+            x1 = self.apply_waveunet_a2a(x1, last_1)
+            x2 = self.apply_waveunet_a2a(x2, last_2)
+
+            x1 = self.apply_spectralmasknet(x1)
+            x2 = self.apply_spectralmasknet(x2)
+            
+
+            x1 = self.conv_post(x1)
+            x2 = self.conv_post(x2)
+
+            last_1 = x1
+            last_2 = x2
+
+            #melspec = self.get_melspec(torch.cat([x1, x2], dim=1))
+        
+        #x1 = self.hifi(sep_subband_spec[:, 0, ...])
+        #x2 = self.hifi(sep_subband_spec[:, 1, ...])
+                
+        #y1 = self.hifi(sep_subband_spec[:, 0, ...].detach())
+        #y2 = self.hifi(sep_subband_spec[:, 1, ...].detach())
+        '''
+        y1 = self.voc_post(x1)
+        y2 = self.voc_post(x2)
+
+        y = torch.cat([y1, y2], dim=1)
+        melspec = self.get_melspec(y)'''
+
+        #x1 = x1.detach()
+        #x2 = x2.detach()
+
+        #x1 = self.conv_post(x1)
+        #x2 = self.conv_post(x2)
+
+        #x1 = self.phase_fixer(x1, x_orig)
+        #x2 = self.phase_fixer(x2, x_orig)
 
         
-        x1 = self.hifi(sep_subband_spec[:, 0, ...])
-        x2 = self.hifi(sep_subband_spec[:, 1, ...])
 
-        x1 = self.apply_waveunet_a2a(x1, x_orig)
-        x2 = self.apply_waveunet_a2a(x2, x_orig)
-
+        #x1 = self.apply_waveunet_a2a(x1, x_orig)
+        #x2 = self.apply_waveunet_a2a(x2, x_orig)
+        '''
         x1 = self.apply_spectralmasknet(x1)
         x2 = self.apply_spectralmasknet(x2)
+        
 
         x1 = self.conv_post(x1)
-        x2 = self.conv_post(x2)
+        x2 = self.conv_post(x2)'''
+
 
         output = torch.cat([x1, x2], dim=1)
 
-        melspec1 = self.get_melspec(output)
+        #output = torch.softmax(output, dim=1)
+
+        #output = output * mix_audio
+
+        #melspec = self.get_melspec(output)
+
+        #output = self.apply_waveunet_a2a(output, x_orig)
+
+        #melspec = self.get_melspec(output)
         # if was_one_d:
         #     return output.squeeze(0)
         #print(output.shape, melspec.shape)
-        return {"separated_audios": output, "fake_melspec": melspec1}
+        return {"separated_audios": output, "fake_melspec": melspec, "sep_melspec": melspec1}
     
     @staticmethod
     def get_melspec(x):
@@ -764,6 +964,7 @@ class TIGER(nn.Module):
 class TIGERSpec(nn.Module):
     def __init__(
         self,
+        generator,
         out_channels=128,
         in_channels=256,
         num_blocks=4,
@@ -779,6 +980,7 @@ class TIGERSpec(nn.Module):
     ):
         super(TIGERSpec, self).__init__()
         
+        self.hifi = generator
         self.sample_rate = sample_rate
         self.win = win
         self.stride = stride
@@ -817,6 +1019,38 @@ class TIGERSpec(nn.Module):
                                            nn.Conv1d(self.feature_dim, self.band_width[i]*4*num_sources, 1, groups=num_sources)
                                           )
                             )
+            
+        self.spectralmasknet = nn_utils.SpectralMaskNet(
+                in_ch=8,
+                block_widths=(8, 12, 24, 32),
+                block_depth=4,
+                norm_type='weight'
+            )
+
+           
+        self.waveunet = nn_utils.MultiScaleResnet(
+                (10, 20, 40, 80),
+                4,
+                mode="waveunet_k5",
+                out_width=8,
+                in_width=8,
+                norm_type='weight'
+            )
+        
+        self.make_spectralmasknet_skip_connect(8)
+        self.make_waveunet_skip_connect(8)
+        self.waveunet_input = "both"
+
+        self.waveunet_conv_pre = weight_norm(
+                nn.Conv1d(
+                    1 + 8, 8, 1
+                )
+            )
+        
+        self.conv_post = weight_norm(nn.Conv1d(8, 1, 7, 1, padding=3))
+        self.conv_post.apply(nn_utils.init_weights)
+        self.voc_post = weight_norm(nn.Conv1d(8, 1, 7, 1, padding=3))
+        self.voc_post.apply(nn_utils.init_weights)
 
     def pad_input(self, input, window, stride):
         """
@@ -833,8 +1067,41 @@ class TIGERSpec(nn.Module):
         input = torch.cat([pad_aux, input, pad_aux], 1)
 
         return input, rest
+    
+    def make_waveunet_skip_connect(self, ch):
+        self.waveunet_skip_connect = weight_norm(nn.Conv1d(ch, ch, 1, 1))
+        self.waveunet_skip_connect.weight.data = torch.eye(ch, ch).unsqueeze(-1)
+        self.waveunet_skip_connect.bias.data.fill_(0.0)
+    
+    def make_spectralmasknet_skip_connect(self, ch):
+        self.spectralmasknet_skip_connect = weight_norm(nn.Conv1d(ch, ch, 1, 1))
+        self.spectralmasknet_skip_connect.weight.data = torch.eye(ch, ch).unsqueeze(-1)
+        self.spectralmasknet_skip_connect.bias.data.fill_(0.0)
+    
+    def apply_spectralmasknet(self, x):
+        x_a = x
+        x = self.spectralmasknet(x)
+        x += self.spectralmasknet_skip_connect(x_a)
+
+        return x
+    
+    def apply_waveunet_a2a(self, x, x_orig):
+        if self.waveunet_input == "waveform":
+            x_a = self.waveunet_conv_pre(x_orig)
+        elif self.waveunet_input == "both":
+            x_a = torch.cat([x, x_orig], 1)
+            x_a = self.waveunet_conv_pre(x_a)
+        elif self.waveunet_input == "hifi":
+            x_a = x
+        else:
+            raise ValueError
+        x = self.waveunet(x_a)
+        x += self.waveunet_skip_connect(x_a)
+
+        return x
         
     def forward(self, mix_audio, **batch):
+        x_orig = mix_audio.clone()
         input = mix_audio
         # input shape: (B, C, T)
         was_one_d = False
@@ -900,6 +1167,31 @@ class TIGERSpec(nn.Module):
         melspec = self.get_melspec(output)
 
         return {"separated_audios": output, "fake_melspec": melspec}
+
+        x1 = self.hifi(melspec[:, 0, ...])
+        x2 = self.hifi(melspec[:, 1, ...])
+
+        y1 = self.voc_post(x1)
+        y2 = self.voc_post(x2)
+
+        y = torch.cat([y1, y2], dim=1)
+        melspec1 = self.get_melspec(y)
+
+        x1 = self.apply_waveunet_a2a(x1, x_orig)
+        x2 = self.apply_waveunet_a2a(x2, x_orig)
+
+        x1 = self.apply_spectralmasknet(x1)
+        x2 = self.apply_spectralmasknet(x2)
+
+        x1 = self.conv_post(x1)
+        x2 = self.conv_post(x2)
+
+        output_ = torch.cat([x1, x2], dim=1)
+
+        #melspec1 = self.get_melspec(output_)
+        #melspec = self.get_melspec(output)
+
+        return {"separated_audios": output_, "fake_melspec": melspec1}
 
     @staticmethod
     def get_melspec(x):

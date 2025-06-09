@@ -2,7 +2,7 @@ defaults:
   - model: tiger
   - writer: wandb
   - metrics: bss
-  - datasets: librispeech_mix
+  - datasets: lrs2mix
   - dataloader: example
   - transforms: bss
   - _self_
@@ -16,7 +16,7 @@ lr_scheduler:
   _target_: torch.optim.lr_scheduler.StepLR
   gamma: 0.99
   step_size: ${trainer.epoch_len}
-generator_loss_function:
+generator_loss_function: 
   _target_: src.loss.BSSGeneratorLoss
 discriminator_loss_function:
   _target_: src.loss.DiscriminatorLoss
@@ -25,8 +25,8 @@ trainer:
   n_epochs: 1000
   epoch_len: null
   device_tensors: ["mix_audio", "ids", "audios"] # which tensors should be on device (ex. GPU)
-  resume_from: null # null or path to the checkpoint dir with *.pth and config.yaml
-  #from_pretrained: D:\HiFi-SS\v1_pretrain_concat_l1_nodiscs-epoch60.pth
+  resume_from: D:\HiFi-SS\saved\testing\checkpoint-epoch14.pth # null or path to the checkpoint dir with *.pth and config.yaml
+ # from_pretrained: D:\HiFi-SS\checkpoint-epoch8.pth
   device: auto # device name or "auto"
   override: True # if True, will override the previous run with the same name
   # monitor: "max test_MulticlassAccuracy" # "off" or "max/min metric_name", i.e. our goal is to maximize/minimize metric

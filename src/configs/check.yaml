@@ -1,5 +1,5 @@
 defaults:
-  - model: bss_test
+  - model: bss_v2
   - datasets: librispeech_mix
   - dataloader: example
   - transforms: bss

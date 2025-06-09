@@ -5,6 +5,7 @@ from src.model.generator.istftnet import Generator
 from src.model.conv_tas_net import ConvTasNet, TasNet
 from src.model.dprnn import Dual_RNN_model
 from src.model.tiger import TIGER, TIGERSpec
+from src.model.fcc_modules import FFCResNetBlock
 
 __all__ = [
     "A2AHiFiPlusGeneratorV2",
@@ -17,6 +18,7 @@ __all__ = [
     "BSSDiscriminator",
     "ConvTasNet",
     "Generator",
+    "FFCResNetBlock",
     "TIGER",
     "TIGERSpec",
     "TasNet",

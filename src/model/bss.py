@@ -82,12 +82,13 @@ class A2AHiFiPlusGeneratorBSS(A2AHiFiPlusGeneratorV2):
         x = self.apply_spectralunet(x)
 
         x = self.hifi(x)
-
+        #x[:, :, :] = torch.randn_like(x)
+        
         if self.use_waveunet and self.waveunet_before_spectralmasknet and not self.hifi.return_stft:
             x = self.apply_waveunet_a2a(x, x_orig)
-
+        '''
         if self.use_spectralmasknet:
-            x = self.apply_spectralmasknet(x)
+            x = self.apply_spectralmasknet(x)'''
 
         if self.use_waveunet and not self.waveunet_before_spectralmasknet:
             x = self.apply_waveunet_a2a(x, x_orig)
@@ -301,9 +302,9 @@ class A2AHiFiPlusGeneratorBSSV3(A2AHiFiPlusGeneratorV2):
         self.conv_post2.apply(nn_utils.init_weights)
 
     def load_state_dict(self, state_dict):
-        custom_state_dict = {k: v for k, v in state_dict.items() if k.startswith('hifi.') or k.startswith('spectralunet.')
-                             or k.startswith('waveunet.')}
-        print(custom_state_dict.keys())
+        custom_state_dict = {k: v for k, v in state_dict.items() if not k.startswith('waveunet4') 
+                             and not k.startswith('waveunet3') and not k.startswith('spectralunet')}
+        #print(custom_state_dict.keys())
         
         super().load_state_dict(custom_state_dict, strict=False)
 
@@ -314,14 +315,20 @@ class A2AHiFiPlusGeneratorBSSV3(A2AHiFiPlusGeneratorV2):
         mel = self.get_melspec(x)
 
 
-        mel = self.apply_spectralunet(mel)
+        #mel = self.apply_spectralunet(mel)
 
         x = self.hifi(mel)
+
+        #x[:, :, :] = 0
+
+        # x = torch.randn((x.size(0), 8, x.size(-1)), device=x.device)
 
         x = self.apply_waveunet_a2a(x, x_orig)
 
         x1 = self.mask1(x[:, :4, :])
         x2 = self.mask2(x[:, 4:, :])
+        #x1 = x[:, :4, :]
+        #x2 = x[:, 4:, :]
         '''
         y1 = self.post1(torch.cat([x1, x_orig, x2[:, 0:1, :]], dim=1))
         y2 = self.post2(torch.cat([x2, x_orig, x1[:, 0:1, :]], dim=1))

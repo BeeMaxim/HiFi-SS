@@ -1,1 +1,3 @@
 _target_: src.model.TIGERSpec
+defaults:
+  - generator: classic

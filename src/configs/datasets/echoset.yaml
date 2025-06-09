@@ -1,16 +1,16 @@
 train:
-  _target_: src.datasets.LibrispeechMixDataset
+  _target_: src.datasets.EchoSetDataset
   part: "train-clean-100"
   segment_size: 16384
-  data_dir: D:\HiFi-SS\data\datasets\librispeech
+  data_dir: D:\HiFi-SS\data\datasets\lrs
   index_dir: indexes
   instance_transforms: ${transforms.instance_transforms.train}
   limit: 500
 test:
-  _target_: src.datasets.LibrispeechMixDataset
+  _target_: src.datasets.EchosetDataset
   part: "test-clean"
   segment_size: 16384
-  data_dir: D:\HiFi-SS\data\datasets\librispeech
+  data_dir: D:\HiFi-SS\data\datasets\lrs
   index_dir: indexes
   instance_transforms: ${transforms.instance_transforms.train}
   limit: 300

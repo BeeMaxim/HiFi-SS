@@ -1,7 +1,7 @@
 defaults:
-  - model: bss_v2
+  - model: tiger
   - metrics: bss
-  - datasets: librispeech_mix # we do not want to run inference on training data
+  - datasets: lrs2mix # we do not want to run inference on training data
   - dataloader: example
   - transforms: bss
   - _self_
@@ -10,4 +10,4 @@ inferencer:
   device: auto # device name or "auto"
   save_path: "example" # any name here, can be a dataset name
   seed: 1
-  from_pretrained: D:\HiFi-SS\v2_post_snr_discs-epoch47.pth # path to the pretrained model
+  from_pretrained: D:\HiFi-SS\tiger_tune-epoch25.pth # path to the pretrained model
